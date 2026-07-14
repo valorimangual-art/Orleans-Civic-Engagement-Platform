@@ -1,0 +1,108 @@
+body {
+    background-color: #0b1f3a;
+    color: white;
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+}
+
+a { color: #FFD700; }
+
+header.site {
+    padding: 24px 32px;
+    border-bottom: 2px solid #16305a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+header.site h1 {
+    color: #FFD700;
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+header.site .tag {
+    color: #9fb3d1;
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+
+nav.site {
+    display: flex;
+    gap: 4px;
+    padding: 0 32px;
+    background: #081729;
+    flex-wrap: wrap;
+}
+
+nav.site a, nav.site button {
+    background: none;
+    border: none;
+    color: #9fb3d1;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    font-weight: 700;
+    text-decoration: none;
+    font-family: inherit;
+}
+nav.site a.active, nav.site button.active { color: #FFD700; border-bottom-color: #FFD700; }
+nav.site a:hover, nav.site button:hover { color: white; }
+
+main.site { padding: 24px 32px 60px; max-width: 1400px; margin: 0 auto; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px,1fr)); gap: 14px; margin-bottom: 22px; }
+.card { background: #122b4f; border: 1px solid #1e3c66; border-radius: 10px; padding: 16px 18px; }
+.card .num { font-size: 1.6rem; font-weight: 800; color: #FFD700; }
+.card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .5px; color: #9fb3d1; margin-top: 2px; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+select, input[type=text], input, textarea {
+    padding: 9px 11px; border: 1px solid #1e3c66; border-radius: 6px;
+    font-size: 0.88rem; background: #0e2340; color: white; font-family: inherit;
+}
+input[type=text] { flex: 1; min-width: 180px; }
+textarea { width: 100%; min-height: 80px; }
+
+table { width: 100%; border-collapse: collapse; background: #0e2340; border-radius: 8px; overflow: hidden; font-size: 0.83rem; }
+th { background: #16305a; color: #FFD700; text-align: left; padding: 9px 10px; cursor: pointer; user-select: none; white-space: nowrap; }
+th:hover { background: #1e3c66; }
+td { padding: 8px 10px; border-bottom: 1px solid #16305a; }
+tr:hover td { background: #122b4f; }
+
+.rate-pill, .status-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-weight: 700; font-size: 0.78rem; color: #0b1f3a; }
+#map { height: 560px; border-radius: 10px; border: 1px solid #1e3c66; }
+.legend { display: flex; gap: 16px; align-items: center; margin: 10px 0; font-size: 0.8rem; flex-wrap: wrap; color: #9fb3d1; }
+.legend .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+
+.note { background: #12331f; border-left: 4px solid #3F7A5C; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 16px; color: #d7ead9; }
+.warn { background: #3a1f1a; border-left: 4px solid #B23A2E; padding: 14px 16px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 16px; color: #f4d6d1; }
+.count { font-size: 0.8rem; color: #9fb3d1; margin-bottom: 8px; }
+
+h1 { color: #FFD700; }
+h2.section { font-size: 1.1rem; color: #FFD700; margin: 4px 0 12px; }
+
+button.primary {
+    background-color: #FFD700; color: #0B1F3A; font-size: 16px;
+    padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;
+}
+button.primary:hover { background-color: #FFC107; }
+
+.form-wrap { max-width: 640px; margin: 0 auto; }
+.field { margin-bottom: 18px; }
+.field label { display: block; margin-bottom: 6px; font-weight: 700; color: #FFD700; font-size: 0.9rem; }
+.field .hint { color: #9fb3d1; font-size: 0.78rem; margin-top: 4px; }
+.checkbox-group label { font-weight: normal; color: white; display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; margin-bottom: 6px; }
+.checkbox-group input { width: auto; }
+
+.success-box { background: #12331f; border: 1px solid #3F7A5C; border-radius: 8px; padding: 24px; text-align: center; }
+.success-box h2 { color: #7fd99b; }
+
+footer.site { text-align: center; font-size: 0.75rem; color: #6f84a8; padding: 24px; }
+code { background: #16305a; padding: 1px 6px; border-radius: 4px; }
