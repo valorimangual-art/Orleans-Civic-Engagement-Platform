@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Outreach Event Log — Orleans Civic Engagement Platform</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<header class="site"><div><h1>Outreach Event Log</h1><div class="tag">Orleans Civic Engagement Platform</div></div><a href="index.html" style="color:#FFD700">&larr; Back to dashboard</a></header>
+<main class="site">
+<div class="form-wrap">
+  <div id="form-view">
+    <form id="eform">
+      <div class="field"><label>Event Name *</label><input type="text" id="event_name" required></div>
+      <div class="field"><label>Date</label><input type="date" id="event_date"></div>
+      <div class="field"><label>Location/Address</label><input type="text" id="location"></div>
+      <div class="field"><label>Precinct/Ward</label><input type="text" id="precinct_ward" placeholder="e.g. W08-P12"></div>
+      <div class="field"><label>Type</label>
+        <select id="event_type"><option value="">Select one</option>
+          <option>Tabling</option><option>Canvassing</option><option>Voter Registration Drive</option><option>Community Event</option>
+        </select>
+      </div>
+      <div class="field"><label>Volunteers Present</label><input type="text" id="volunteers_present" placeholder="Names or count"></div>
+      <div class="field"><label>New Registrations Collected</label><input type="number" id="new_registrations"></div>
+      <div class="field"><label>Notes</label><textarea id="notes"></textarea></div>
+      <button type="submit" class="primary">Submit</button>
+      <div id="err" style="color:#ff8a80;margin-top:12px;"></div>
+    </form>
+  </div>
+  <div id="success-view" style="display:none">
+    <div class="success-box"><h2>Logged!</h2><p>Event added to the tracker.</p>
+    <p><a href="event-form.html">Log another event</a> &middot; <a href="index.html">Back to dashboard</a></p></div>
+  </div>
+</div>
+</main>
+<script>
+document.getElementById('eform').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const row = {
+    event_name: document.getElementById('event_name').value,
+    event_date: document.getElementById('event_date').value || null,
+    location: document.getElementById('location').value,
+    precinct_ward: document.getElementById('precinct_ward').value,
+    event_type: document.getElementById('event_type').value,
+    volunteers_present: document.getElementById('volunteers_present').value,
+    new_registrations: document.getElementById('new_registrations').value ? parseInt(document.getElementById('new_registrations').value) : null,
+    notes: document.getElementById('notes').value
+  };
+  const { error } = await sb.from('outreach_events').insert([row]);
+  if(error){ document.getElementById('err').textContent = 'Something went wrong: ' + error.message; return; }
+  document.getElementById('form-view').style.display='none';
+  document.getElementById('success-view').style.display='block';
+});
+</script>
+</body></html>
