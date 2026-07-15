@@ -2,71 +2,80 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Volunteer Sign-Up — Orleans Civic Engagement Platform</title>
+<title>Volunteer Sign-Up — Orleans Parish Civic OS</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 </head>
 <body>
-<header class="site"><div><h1>Volunteer Sign-Up</h1><div class="tag">Orleans Civic Engagement Platform</div></div><a href="index.html" style="color:#FFD700">&larr; Back to dashboard</a></header>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="volunteers.html">&larr; Back to Volunteers</a></nav>
+</header>
 <main class="site">
-<div class="form-wrap">
-  <div id="form-view">
-    <form id="vform">
-      <div class="field"><label>Name *</label><input type="text" id="name" required></div>
-      <div class="field"><label>Phone</label><input type="text" id="phone"></div>
-      <div class="field"><label>Email</label><input type="email" id="email"></div>
-      <div class="field"><label>Home Precinct</label><input type="text" id="home_precinct" placeholder="e.g. W08-P12"></div>
-      <div class="field"><label>Skills</label>
-        <div class="checkbox-group" id="skills-group">
-          <label><input type="checkbox" value="Canvassing">Canvassing</label>
-          <label><input type="checkbox" value="Tabling">Tabling</label>
-          <label><input type="checkbox" value="Phone Banking">Phone Banking</label>
-          <label><input type="checkbox" value="Data Entry">Data Entry</label>
-          <label><input type="checkbox" value="Driving">Driving</label>
-          <label><input type="checkbox" value="Translation">Translation</label>
-          <label><input type="checkbox" value="Event Lead">Event Lead</label>
+  <div class="page-title">Volunteer Sign-Up</div>
+  <div class="form-wrap">
+    <div id="form-view">
+      <form id="vform">
+        <div class="field"><label>Name *</label><input type="text" id="name" required></div>
+        <div class="field"><label>Phone</label><input type="text" id="phone"></div>
+        <div class="field"><label>Email</label><input type="email" id="email"></div>
+        <div class="field"><label>Home Precinct</label><input type="text" id="home_precinct" placeholder="e.g. W08-P12"></div>
+        <div class="field"><label>Skills</label>
+          <div id="skills-group">
+            <label><input type="checkbox" value="Canvassing">Canvassing</label>
+            <label><input type="checkbox" value="Tabling">Tabling</label>
+            <label><input type="checkbox" value="Phone Banking">Phone Banking</label>
+            <label><input type="checkbox" value="Data Entry">Data Entry</label>
+            <label><input type="checkbox" value="Driving">Driving</label>
+            <label><input type="checkbox" value="Translation">Translation</label>
+            <label><input type="checkbox" value="Event Lead">Event Lead</label>
+          </div>
         </div>
-      </div>
-      <div class="field"><label>Languages</label><input type="text" id="languages"></div>
-      <div class="field"><label>Transportation</label>
-        <select id="transportation">
-          <option value="">Select one</option>
-          <option>Own Vehicle</option><option>Public Transit</option><option>Carpool</option><option>Needs Ride</option>
-        </select>
-      </div>
-      <div class="field"><label>Availability</label>
-        <div class="checkbox-group" id="avail-group">
-          <label><input type="checkbox" value="Weekday Morning">Weekday Morning</label>
-          <label><input type="checkbox" value="Weekday Afternoon">Weekday Afternoon</label>
-          <label><input type="checkbox" value="Weekday Evening">Weekday Evening</label>
-          <label><input type="checkbox" value="Weekend">Weekend</label>
-          <label><input type="checkbox" value="Overnight">Overnight</label>
+        <div class="field"><label>Languages</label><input type="text" id="languages"></div>
+        <div class="field"><label>Transportation</label>
+          <select id="transportation"><option value="">Select one</option>
+            <option>Own Vehicle</option><option>Public Transit</option><option>Carpool</option><option>Needs Ride</option>
+          </select>
         </div>
+        <div class="field"><label>Availability</label>
+          <div id="avail-group">
+            <label><input type="checkbox" value="Weekday Morning">Weekday Morning</label>
+            <label><input type="checkbox" value="Weekday Afternoon">Weekday Afternoon</label>
+            <label><input type="checkbox" value="Weekday Evening">Weekday Evening</label>
+            <label><input type="checkbox" value="Weekend">Weekend</label>
+            <label><input type="checkbox" value="Overnight">Overnight</label>
+          </div>
+        </div>
+        <button type="submit" class="primary">Submit</button>
+        <div id="err" style="color:#8f3b39;margin-top:12px;"></div>
+      </form>
+    </div>
+    <div id="success-view" style="display:none">
+      <div class="card card-pad" style="border-color:#3f6b48;background:#e3ece3">
+        <div style="font:800 16px 'Nunito',sans-serif;color:#3f6b48">Thanks!</div>
+        <p class="td">You're on the list. Someone from the team will be in touch.</p>
+        <p><a href="volunteer-form.html">Add another volunteer</a> &middot; <a href="volunteers.html">Back to Volunteers</a></p>
       </div>
-      <button type="submit" class="primary">Submit</button>
-      <div id="err" style="color:#ff8a80;margin-top:12px;"></div>
-    </form>
+    </div>
   </div>
-  <div id="success-view" style="display:none">
-    <div class="success-box"><h2>Thanks!</h2><p>You're on the list. Someone from the team will be in touch.</p>
-    <p><a href="volunteer-form.html">Add another volunteer</a> &middot; <a href="index.html">Back to dashboard</a></p></div>
-  </div>
-</div>
 </main>
+</div>
+<style>
+#skills-group label, #avail-group label { font-weight:600; display:inline-flex; align-items:center; gap:6px; margin-right:14px; margin-bottom:6px; font-size:13px; }
+#skills-group input, #avail-group input { width:auto; }
+</style>
 <script>
 document.getElementById('vform').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const skills = [...document.querySelectorAll('#skills-group input:checked')].map(c=>c.value).join(', ');
   const availability = [...document.querySelectorAll('#avail-group input:checked')].map(c=>c.value).join(', ');
   const row = {
-    name: document.getElementById('name').value,
-    phone: document.getElementById('phone').value,
-    email: document.getElementById('email').value,
-    home_precinct: document.getElementById('home_precinct').value,
+    name: document.getElementById('name').value, phone: document.getElementById('phone').value,
+    email: document.getElementById('email').value, home_precinct: document.getElementById('home_precinct').value,
     skills, languages: document.getElementById('languages').value,
-    transportation: document.getElementById('transportation').value,
-    availability
+    transportation: document.getElementById('transportation').value, availability
   };
   const { error } = await sb.from('volunteers').insert([row]);
   if(error){ document.getElementById('err').textContent = 'Something went wrong: ' + error.message; return; }
@@ -74,4 +83,5 @@ document.getElementById('vform').addEventListener('submit', async (e)=>{
   document.getElementById('success-view').style.display='block';
 });
 </script>
-</body></html>
+</body>
+</html>

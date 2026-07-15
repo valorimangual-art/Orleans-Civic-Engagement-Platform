@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volunteers — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html" class="active">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="page-title" style="margin:0">Volunteers</div>
+    <a href="volunteer-form.html"><button class="primary">+ Sign Up New Volunteer</button></a>
+  </div>
+  <div class="th" id="count" style="margin-bottom:8px"></div>
+  <div class="card" style="overflow-x:auto">
+    <table class="data-table" style="min-width:900px">
+      <thead><tr class="th">
+        <th style="padding:10px 12px">Name</th><th>Phone</th><th>Email</th><th>Home Precinct</th><th>Status</th>
+        <th>Skills</th><th>Transportation</th><th>Availability</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+</div>
+<script>
+const statusColors = {New:'#2560b0', Contacted:'#7d652a', Active:'#3f6b48', Inactive:'#8f3b39'};
+async function load(){
+  const { data } = await sb.from('volunteers').select('*').order('created_at',{ascending:false});
+  const vols = data||[];
+  document.getElementById('count').textContent = vols.length + ' volunteers';
+  document.getElementById('rows').innerHTML = vols.map(v=>{
+    const c = statusColors[v.status]||'#666';
+    return `<tr class="td">
+      <td style="padding:9px 12px">${v.name||''}</td><td>${v.phone||''}</td><td>${v.email||''}</td><td class="td-muted">${v.home_precinct||''}</td>
+      <td><span class="chip" style="background:${c}22;color:${c}">${v.status||'New'}</span></td>
+      <td class="td-muted">${v.skills||''}</td><td class="td-muted">${v.transportation||''}</td><td class="td-muted">${v.availability||''}</td></tr>`;
+  }).join('');
+}
+load();
+</script>
+</body>
+</html>
