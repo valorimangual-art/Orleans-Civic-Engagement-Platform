@@ -28,7 +28,12 @@
           </select>
         </div>
         <div class="field"><label>Volunteers Present</label><input type="text" id="volunteers_present"></div>
-        <div class="field"><label>New Registrations Collected</label><input type="number" id="new_registrations"></div>
+        <div class="field"><label>New Registrations Collected (projected, pending your confirmation)</label><input type="number" id="new_registrations"></div>
+        <div class="field"><label>Contacts Found Already Registered but Inactive</label><input type="number" id="voters_found_inactive"></div>
+        <div class="field"><label>Contacts Unsure if Registered</label><input type="number" id="unsure_registration_status"></div>
+        <div class="field"><label>Doors Knocked</label><input type="number" id="doors_knocked"></div>
+        <div class="field"><label>Flyers Distributed</label><input type="number" id="flyers_distributed"></div>
+        <div class="field"><label>Signatures Collected</label><input type="number" id="signatures_collected"></div>
         <div class="field"><label>Notes</label><textarea id="notes"></textarea></div>
         <button type="submit" class="primary">Submit</button>
         <div id="err" style="color:#8f3b39;margin-top:12px;"></div>
@@ -55,6 +60,11 @@ document.getElementById('eform').addEventListener('submit', async (e)=>{
     event_type: document.getElementById('event_type').value,
     volunteers_present: document.getElementById('volunteers_present').value,
     new_registrations: document.getElementById('new_registrations').value ? parseInt(document.getElementById('new_registrations').value) : null,
+    voters_found_inactive: document.getElementById('voters_found_inactive').value ? parseInt(document.getElementById('voters_found_inactive').value) : null,
+    unsure_registration_status: document.getElementById('unsure_registration_status').value ? parseInt(document.getElementById('unsure_registration_status').value) : null,
+    doors_knocked: document.getElementById('doors_knocked').value ? parseInt(document.getElementById('doors_knocked').value) : null,
+    flyers_distributed: document.getElementById('flyers_distributed').value ? parseInt(document.getElementById('flyers_distributed').value) : null,
+    signatures_collected: document.getElementById('signatures_collected').value ? parseInt(document.getElementById('signatures_collected').value) : null,
     notes: document.getElementById('notes').value
   };
   const { error } = await sb.from('outreach_events').insert([row]);

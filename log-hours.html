@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Volunteer Hours — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="volunteers.html">&larr; Back to Volunteers</a></nav>
+</header>
+<main class="site">
+  <div class="page-title">Log Volunteer Hours</div>
+  <div class="form-wrap">
+    <div id="form-view">
+      <form id="hform">
+        <div class="field"><label>Volunteer *</label>
+          <select id="volunteer_id" required><option value="">Loading volunteers…</option></select>
+        </div>
+        <div class="field"><label>Event *</label>
+          <select id="event_id" required><option value="">Loading events…</option></select>
+        </div>
+        <div class="field"><label>Hours *</label><input type="number" step="0.25" id="hours" required></div>
+        <div class="field"><label>Role at this Event</label>
+          <select id="role"><option value="">Select one</option><option>Canvassing</option><option>Tabling</option><option>Flyering</option><option>Training Others</option><option>Event Lead</option></select>
+        </div>
+        <button type="submit" class="primary">Submit</button>
+        <div id="err" style="color:#8f3b39;margin-top:12px;"></div>
+      </form>
+    </div>
+    <div id="success-view" style="display:none">
+      <div class="card card-pad" style="border-color:#3f6b48;background:#e3ece3">
+        <div style="font:800 16px 'Nunito',sans-serif;color:#3f6b48">Logged!</div>
+        <p class="td">Hours added — this now counts toward that volunteer's real activity and that precinct's outreach totals.</p>
+        <p><a href="log-hours.html">Log another</a> &middot; <a href="volunteers.html">Back to Volunteers</a></p>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+async function load(){
+  const [vol, ev] = await Promise.all([
+    sb.from('volunteers').select('id,name').order('name'),
+    sb.from('outreach_events').select('id,event_name,event_date').order('event_date',{ascending:false}),
+  ]);
+  const volSel = document.getElementById('volunteer_id');
+  volSel.innerHTML = '<option value="">Select a volunteer</option>' + (vol.data||[]).map(v=>`<option value="${v.id}">${v.name}</option>`).join('');
+  const evSel = document.getElementById('event_id');
+  evSel.innerHTML = '<option value="">Select an event</option>' + (ev.data||[]).map(e=>`<option value="${e.id}">${e.event_date||'(no date)'} — ${e.event_name}</option>`).join('');
+}
+load();
+
+document.getElementById('hform').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const row = {
+    volunteer_id: parseInt(document.getElementById('volunteer_id').value),
+    event_id: parseInt(document.getElementById('event_id').value),
+    hours: parseFloat(document.getElementById('hours').value),
+    role: document.getElementById('role').value
+  };
+  const { error } = await sb.from('volunteer_event_hours').insert([row]);
+  if(error){ document.getElementById('err').textContent = 'Something went wrong: ' + error.message; return; }
+  document.getElementById('form-view').style.display='none';
+  document.getElementById('success-view').style.display='block';
+});
+</script>
+</body>
+</html>

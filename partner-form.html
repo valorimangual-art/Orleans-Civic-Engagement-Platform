@@ -26,7 +26,16 @@
             <option>Nonprofit</option><option>Church/Faith Org</option><option>School</option><option>Business</option><option>Neighborhood Association</option><option>Other</option>
           </select>
         </div>
-        <div class="field"><label>Neighborhood/Precinct Served</label><input type="text" id="area_served"></div>
+        <div class="field"><label>Neighborhood/Precinct Served (description)</label><input type="text" id="area_served"></div>
+        <div class="field"><label>Ward (for exact ward-level counting)</label>
+          <select id="ward"><option value="">Not tied to one ward</option>
+            <option value="1">Ward 1</option><option value="2">Ward 2</option><option value="3">Ward 3</option><option value="4">Ward 4</option>
+            <option value="5">Ward 5</option><option value="6">Ward 6</option><option value="7">Ward 7</option><option value="8">Ward 8</option>
+            <option value="9">Ward 9</option><option value="10">Ward 10</option><option value="11">Ward 11</option><option value="12">Ward 12</option>
+            <option value="13">Ward 13</option><option value="14">Ward 14</option><option value="15">Ward 15</option><option value="16">Ward 16</option><option value="17">Ward 17</option>
+          </select>
+          <div class="hint">Optional, but set this for an exact ward count instead of a text-match guess.</div>
+        </div>
         <div class="field"><label>Relationship Status</label>
           <select id="status"><option>Not Contacted</option><option>Contacted</option><option>Meeting Scheduled</option><option>Active Partner</option></select>
         </div>
@@ -51,7 +60,9 @@ document.getElementById('pform').addEventListener('submit', async (e)=>{
   const row = {
     org_name: document.getElementById('org_name').value, contact_name: document.getElementById('contact_name').value,
     contact_info: document.getElementById('contact_info').value, org_type: document.getElementById('org_type').value,
-    area_served: document.getElementById('area_served').value, status: document.getElementById('status').value,
+    area_served: document.getElementById('area_served').value,
+    ward: document.getElementById('ward').value ? parseInt(document.getElementById('ward').value) : null,
+    status: document.getElementById('status').value,
     notes: document.getElementById('notes').value
   };
   const { error } = await sb.from('community_partners').insert([row]);

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Precinct Detail — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html" class="active">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+  </nav>
+</header>
+<main class="site">
+  <div id="content">
+    <div class="th">Loading…</div>
+  </div>
+</main>
+</div>
+<script>
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function rateColor(r){ if(r==null) return '#999'; if(r<0.60) return '#a94442'; if(r<0.85) return '#b8963f'; return '#5f8f6d'; }
+function statusLabel(r){ if(r==null) return ['Unknown','#999']; if(r<0.60) return ['Needs Attention','#a94442']; if(r<0.85) return ['Moderate','#b8963f']; return ['On Track','#5f8f6d']; }
+
+const params = new URLSearchParams(window.location.search);
+const pw = params.get('pw');
+
+async function load(){
+  if(!pw){
+    document.getElementById('content').innerHTML = '<div class="card card-pad">No precinct specified. Go back to <a href="precincts.html">Precincts</a> and click a row.</div>';
+    return;
+  }
+  const [precRes, allPrecRes, volRes, evRes, hoursRes, snapRes] = await Promise.all([
+    sb.from('precincts').select('*').eq('precinct_ward', pw).single(),
+    sb.from('precincts').select('precinct_ward,adult_population,registered_voters'),
+    sb.from('volunteers').select('*').eq('home_precinct', pw),
+    sb.from('outreach_events').select('*').eq('precinct_ward', pw).order('event_date',{ascending:false}),
+    sb.from('volunteer_event_hours').select('*'),
+    sb.from('registration_snapshots').select('*').eq('precinct_ward', pw).order('snapshot_date',{ascending:true}),
+  ]);
+
+  const p = precRes.data;
+  if(!p){
+    document.getElementById('content').innerHTML = `<div class="card card-pad">Precinct "${pw}" not found.</div>`;
+    return;
+  }
+
+  const allPrec = allPrecRes.data || [];
+  const unregisteredHere = (p.adult_population||0) - (p.registered_voters||0);
+  const maxUnregistered = Math.max(...allPrec.map(x=>(x.adult_population||0)-(x.registered_voters||0)), 1);
+  const priorityScore = Math.round(Math.max(0, unregisteredHere) / maxUnregistered * 100);
+  const [statusText, statusColor] = statusLabel(p.registration_rate);
+
+  const volunteers = volRes.data || [];
+  const events = evRes.data || [];
+  const eventIds = events.map(e=>e.id);
+  const hoursRows = (hoursRes.data||[]).filter(h=>eventIds.includes(h.event_id));
+  const totalHours = hoursRows.reduce((s,h)=>s+(parseFloat(h.hours)||0),0);
+  const doorsKnocked = events.reduce((s,e)=>s+(e.doors_knocked||0),0);
+  const flyers = events.reduce((s,e)=>s+(e.flyers_distributed||0),0);
+  const signatures = events.reduce((s,e)=>s+(e.signatures_collected||0),0);
+  const foundInactive = events.reduce((s,e)=>s+(e.voters_found_inactive||0),0);
+  const unsureStatus = events.reduce((s,e)=>s+(e.unsure_registration_status||0),0);
+  const confirmedNew = events.filter(e=>e.confirmed).reduce((s,e)=>s+(e.new_registrations||0),0);
+  const projectedNew = events.filter(e=>!e.confirmed).reduce((s,e)=>s+(e.new_registrations||0),0);
+  const lastOutreach = events.length ? events[0].event_date : null;
+
+  const snapshots = snapRes.data || [];
+  const trendHtml = snapshots.length > 1
+    ? snapshots.map(s=>`<div class="td-muted" style="font-size:11px">${s.snapshot_date}: ${s.registered_voters.toLocaleString()}</div>`).join('')
+    : `<div class="td-muted" style="font-size:12px">Only one data point so far (today). Trend will build as snapshots are recorded going forward — this can't be shown retroactively since no history exists yet.</div>`;
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">${p.precinct_ward}</div>
+        <div class="td-muted">Ward ${p.ward} &middot; Council District ${p.council_district} &middot; ${p.planning_district}</div>
+      </div>
+      <span class="chip" style="background:${statusColor}22;color:${statusColor};font-size:13px;padding:6px 14px">${statusText}</span>
+    </div>
+
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="card stat-card"><div class="th">Adult Population</div><div class="stat-value">${(p.adult_population||0).toLocaleString()}</div></div>
+      <div class="card stat-card"><div class="th">Registered Voters</div><div class="stat-value">${(p.registered_voters||0).toLocaleString()}</div></div>
+      <div class="card stat-card"><div class="th">Registration Rate</div><div class="stat-value">${pct(p.registration_rate)}</div></div>
+      <div class="card stat-card"><div class="th">Estimated Unregistered</div><div class="stat-value">${unregisteredHere.toLocaleString()}</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card card-pad">
+        <div class="card-title">Priority Score: ${priorityScore} / 100</div>
+        <div class="td-muted" style="font-size:12px">
+          Formula: this precinct's unregistered adults (${unregisteredHere.toLocaleString()}) as a percentage of the highest unregistered-adult count citywide (${maxUnregistered.toLocaleString()}).
+          Not an official metric — just a transparent way to rank where outreach has the most raw upside.
+        </div>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title">Neighborhood &amp; Polling</div>
+        <div class="td">${p.neighborhood||'—'}</div>
+        <div class="td-muted" style="margin-top:6px">Polling place: ${p.polling_location||'—'}</div>
+        <div class="td-muted">Last outreach logged: ${lastOutreach||'None yet'}</div>
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:14px">
+      <div class="card-title">Registration Pipeline for this Precinct</div>
+      <table class="data-table">
+        <tr class="td"><td class="td-muted">Registered (official, last refresh)</td><td style="text-align:right">${(p.registered_voters||0).toLocaleString()}</td></tr>
+        <tr class="td"><td class="td-muted">+ Confirmed by you since then</td><td style="text-align:right;color:#3f6b48">${confirmedNew.toLocaleString()}</td></tr>
+        <tr class="td"><td class="td-muted">+ Still projected (unconfirmed)</td><td style="text-align:right;color:#b8963f">${projectedNew.toLocaleString()}</td></tr>
+        <tr class="td" style="font-weight:800;border-top:2px solid #f0ece2"><td>Estimated current total</td><td style="text-align:right">${((p.registered_voters||0)+confirmedNew+projectedNew).toLocaleString()}</td></tr>
+      </table>
+      <div class="td-muted" style="font-size:11px;margin-top:8px">Confirm pending signups on the <a href="confirm-registrations.html">Confirm Registrations</a> page. The official Registered number only ever updates from a real state refresh.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card card-pad">
+        <div class="card-title">Outreach Activity</div>
+        <table class="data-table">
+          <tr class="td"><td class="td-muted">Events logged</td><td style="text-align:right">${events.length}</td></tr>
+          <tr class="td"><td class="td-muted">Volunteer hours logged</td><td style="text-align:right">${totalHours || '0 — none logged yet'}</td></tr>
+          <tr class="td"><td class="td-muted">Doors knocked</td><td style="text-align:right">${doorsKnocked || '0 — none logged yet'}</td></tr>
+          <tr class="td"><td class="td-muted">Flyers distributed</td><td style="text-align:right">${flyers || '0 — none logged yet'}</td></tr>
+          <tr class="td"><td class="td-muted">Signatures collected</td><td style="text-align:right">${signatures || '0 — none logged yet'}</td></tr>
+          <tr class="td"><td class="td-muted">Found registered but inactive</td><td style="text-align:right">${foundInactive || '0'}</td></tr>
+          <tr class="td"><td class="td-muted">Unsure if registered</td><td style="text-align:right">${unsureStatus || '0'}</td></tr>
+        </table>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title">Volunteers Assigned (${volunteers.length})</div>
+        ${volunteers.length ? volunteers.map(v=>`<div class="td" style="padding:6px 0;border-bottom:1px solid #f5f2ea">${v.name} <span class="chip chip-neutral" style="margin-left:6px">${v.contact_status||v.status||''}</span></div>`).join('')
+          : '<div class="td-muted">No volunteers with this home precinct yet.</div>'}
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:14px">
+      <div class="card-title">Registration Trend</div>
+      ${trendHtml}
+    </div>
+
+    <div class="card card-pad">
+      <div class="card-title">Events at this Precinct</div>
+      ${events.length ? `<table class="data-table"><thead><tr class="th"><th>Date</th><th>Event</th><th>Type</th><th>New Reg.</th></tr></thead><tbody>
+        ${events.map(e=>`<tr class="td"><td>${e.event_date||''}</td><td>${e.event_name}</td><td class="td-muted">${e.event_type||''}</td><td>${e.new_registrations||''}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="td-muted">No events logged at this precinct yet.</div>'}
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

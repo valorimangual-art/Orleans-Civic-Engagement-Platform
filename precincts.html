@@ -43,6 +43,10 @@
         <th data-k="reg" style="cursor:pointer">Registered</th>
         <th data-k="vap" style="cursor:pointer">Adult Pop.</th>
         <th data-k="rate" style="cursor:pointer">Reg. Rate</th>
+        <th data-k="confirmed" style="cursor:pointer">Confirmed New</th>
+        <th data-k="projected" style="cursor:pointer">Projected</th>
+        <th data-k="inactiveFound" style="cursor:pointer">Found Inactive</th>
+        <th data-k="unsure" style="cursor:pointer">Unsure</th>
         <th>Polling Location</th>
       </tr></thead>
       <tbody id="rows"></tbody>
@@ -58,12 +62,28 @@ let DATA = [];
 let sortState = {key:'pw', dir:1};
 
 async function load(){
-  const { data } = await sb.from('precincts').select('*');
-  DATA = (data||[]).map(p=>({
-    pw:p.precinct_ward, ward:p.ward, council:p.council_district, planning:p.planning_district,
-    neighborhood:p.neighborhood, reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate,
-    polling:p.polling_location
-  }));
+  const [precRes, evRes] = await Promise.all([
+    sb.from('precincts').select('*'),
+    sb.from('outreach_events').select('*'),
+  ]);
+  const events = evRes.data || [];
+  const byPrecinct = {};
+  events.forEach(e=>{
+    const k = e.precinct_ward; if(!k) return;
+    if(!byPrecinct[k]) byPrecinct[k] = {confirmed:0, projected:0, inactiveFound:0, unsure:0};
+    if(e.confirmed) byPrecinct[k].confirmed += (e.new_registrations||0);
+    else byPrecinct[k].projected += (e.new_registrations||0);
+    byPrecinct[k].inactiveFound += (e.voters_found_inactive||0);
+    byPrecinct[k].unsure += (e.unsure_registration_status||0);
+  });
+  DATA = (precRes.data||[]).map(p=>{
+    const agg = byPrecinct[p.precinct_ward] || {confirmed:0, projected:0, inactiveFound:0, unsure:0};
+    return {
+      pw:p.precinct_ward, ward:p.ward, council:p.council_district, planning:p.planning_district,
+      neighborhood:p.neighborhood, reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate,
+      polling:p.polling_location, ...agg
+    };
+  });
   populateFilters();
   render();
 }
@@ -87,8 +107,13 @@ function render(){
   rows.sort((a,b)=>{ let av=a[sortState.key], bv=b[sortState.key]; if(av==null) av=sortState.dir===1?Infinity:-Infinity; if(bv==null) bv=sortState.dir===1?Infinity:-Infinity; if(typeof av==='string') return av.localeCompare(bv)*sortState.dir; return (av-bv)*sortState.dir; });
   document.getElementById('count').textContent = rows.length + ' of ' + DATA.length + ' precincts';
   document.getElementById('rows').innerHTML = rows.map(p=>`<tr class="td">
-    <td style="padding:9px 12px">${p.pw}</td><td>${p.ward}</td><td>${p.council}</td><td>${p.planning}</td><td class="td-muted">${p.neighborhood||''}</td>
+    <td style="padding:9px 12px"><a href="precinct-detail.html?pw=${encodeURIComponent(p.pw)}">${p.pw}</a></td>
+    <td><a href="ward-detail.html?ward=${p.ward}">${p.ward}</a></td><td>${p.council}</td><td>${p.planning}</td><td class="td-muted">${p.neighborhood||''}</td>
     <td>${p.reg}</td><td>${p.vap||'—'}</td><td><span class="chip" style="background:${rateColor(p.rate)}22;color:${rateColor(p.rate)}">${pct(p.rate)}</span></td>
+    <td style="color:#3f6b48">${p.confirmed||''}</td>
+    <td style="color:#b8963f">${p.projected||''}</td>
+    <td style="color:#a94442">${p.inactiveFound||''}</td>
+    <td class="td-muted">${p.unsure||''}</td>
     <td class="td-muted">${p.polling||''}</td></tr>`).join('');
 }
 ['search','f-ward','f-council','f-planning'].forEach(id=> document.getElementById(id).addEventListener('input', render));

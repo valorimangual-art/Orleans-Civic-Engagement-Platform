@@ -29,6 +29,11 @@
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
     <div class="page-title" style="margin:0">Coverage Map</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="seg-group">
+        <button class="seg active" data-level="precinct">Precincts</button>
+        <button class="seg" data-level="ward">Wards</button>
+        <button class="seg" data-level="neighborhood">Neighborhoods</button>
+      </div>
       <select id="map-council"><option value="">All Council Districts</option></select>
       <select id="map-planning"><option value="">All Planning Districts</option></select>
     </div>
@@ -78,34 +83,95 @@ function popupHtml(p){
     Registered: ${p.reg} / Adult Pop: ${p.vap||'—'}<br>Reg. Rate: <strong>${pct(p.rate)}</strong><br>Polling: ${p.polling||''}`;
   if(vols.length) html += `<br><br><strong>Volunteers here (${vols.length}):</strong><br>` + vols.map(v=>v.name).join(', ');
   if(events.length) html += `<br><br><strong>Events logged (${events.length}):</strong><br>` + events.slice(0,5).map(e=>`${e.event_date||''} — ${e.event_name}`).join('<br>');
+  html += `<br><br><a href="precinct-detail.html?pw=${encodeURIComponent(p.pw)}">View full detail &rarr;</a>`;
   return html;
 }
 
-async function initMap(){
-  const map = L.map('map').setView([29.9639, -90.0407], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OpenStreetMap contributors', maxZoom:18}).addTo(map);
-  const byPw = {}; DATA.precincts.forEach(p=> byPw[p.pw]=p);
-  const res = await fetch('precinct_boundaries.geojson');
-  const gj = await res.json();
-  const layers = [];
-  const geoLayer = L.geoJSON(gj, {
-    style: f=>{ const p = byPw[f.properties.precinct_ward]; return {color:'#0b1f3a', weight:1, fillColor:p?rateColor(p.rate):'#999', fillOpacity:0.65}; },
-    onEachFeature:(f,layer)=>{
-      const p = byPw[f.properties.precinct_ward]; if(!p) return;
-      layer.bindPopup(popupHtml(p));
-      layer._council = p.council; layer._planning = p.planning;
-      layer.on('mouseover', ()=>layer.setStyle({weight:3,fillOpacity:0.85}));
-      layer.on('mouseout', ()=>layer.setStyle({weight:1,fillOpacity:0.65}));
-      layers.push(layer);
-    }
-  }).addTo(map);
-  map.fitBounds(geoLayer.getBounds());
-  function filterMap(){
-    const c = document.getElementById('map-council').value, pl = document.getElementById('map-planning').value;
-    layers.forEach(l=>{ const show=(!c||l._council===c)&&(!pl||l._planning===pl); l.setStyle({opacity:show?1:0.05, fillOpacity:show?0.65:0.03}); });
+let currentLevel = 'precinct';
+let currentLayer = null;
+let leafletMap = null;
+
+function aggregate(level){
+  const groups = {};
+  DATA.precincts.forEach(p=>{
+    const key = level==='ward' ? p.ward : level==='neighborhood' ? p.neighborhood : p.pw;
+    if(key==null) return;
+    if(!groups[key]) groups[key] = {reg:0, vap:0, count:0};
+    groups[key].reg += (p.reg||0);
+    groups[key].vap += (p.vap||0);
+    groups[key].count += 1;
+  });
+  Object.values(groups).forEach(g=> g.rate = g.vap ? g.reg/g.vap : null);
+  return groups;
+}
+
+function levelPopupHtml(level, key, g){
+  if(level==='ward'){
+    return `<strong>Ward ${key}</strong><br>${g.count} precincts<br>Registered: ${g.reg.toLocaleString()} / Adult Pop: ${g.vap.toLocaleString()}<br>Reg. Rate: <strong>${pct(g.rate)}</strong><br><br><a href="ward-detail.html?ward=${key}">View full detail &rarr;</a>`;
   }
+  return `<strong>${key}</strong><br>${g.count} precincts<br>Registered: ${g.reg.toLocaleString()} / Adult Pop: ${g.vap.toLocaleString()}<br>Reg. Rate: <strong>${pct(g.rate)}</strong>`;
+}
+
+async function renderLevel(level){
+  currentLevel = level;
+  if(currentLayer){ leafletMap.removeLayer(currentLayer); }
+
+  if(level==='precinct'){
+    const byPw = {}; DATA.precincts.forEach(p=> byPw[p.pw]=p);
+    const res = await fetch('precinct_boundaries.geojson');
+    const gj = await res.json();
+    const layers = [];
+    currentLayer = L.geoJSON(gj, {
+      style: f=>{ const p = byPw[f.properties.precinct_ward]; return {color:'#0b1f3a', weight:1, fillColor:p?rateColor(p.rate):'#999', fillOpacity:0.65}; },
+      onEachFeature:(f,layer)=>{
+        const p = byPw[f.properties.precinct_ward]; if(!p) return;
+        layer.bindPopup(popupHtml(p));
+        layer._council = p.council; layer._planning = p.planning;
+        layer.on('mouseover', ()=>layer.setStyle({weight:3,fillOpacity:0.85}));
+        layer.on('mouseout', ()=>layer.setStyle({weight:1,fillOpacity:0.65}));
+        layers.push(layer);
+      }
+    }).addTo(leafletMap);
+    window._filterLayers = layers;
+  } else {
+    const file = level==='ward' ? 'ward_boundaries.geojson' : 'neighborhood_boundaries.geojson';
+    const propKey = level==='ward' ? 'ward' : 'neighborhood';
+    const res = await fetch(file);
+    const gj = await res.json();
+    const groups = aggregate(level);
+    currentLayer = L.geoJSON(gj, {
+      style: f=>{ const key = f.properties[propKey]; const g = groups[key]; return {color:'#0b1f3a', weight:1.5, fillColor:g?rateColor(g.rate):'#999', fillOpacity:0.65}; },
+      onEachFeature:(f,layer)=>{
+        const key = f.properties[propKey]; const g = groups[key]; if(!g) return;
+        layer.bindPopup(levelPopupHtml(level, key, g));
+        layer.on('mouseover', ()=>layer.setStyle({weight:3,fillOpacity:0.85}));
+        layer.on('mouseout', ()=>layer.setStyle({weight:1.5,fillOpacity:0.65}));
+      }
+    }).addTo(leafletMap);
+    window._filterLayers = [];
+  }
+  leafletMap.fitBounds(currentLayer.getBounds());
+}
+
+function filterMap(){
+  if(currentLevel!=='precinct') return; // council/planning filters only apply at precinct level
+  const c = document.getElementById('map-council').value, pl = document.getElementById('map-planning').value;
+  (window._filterLayers||[]).forEach(l=>{ const show=(!c||l._council===c)&&(!pl||l._planning===pl); l.setStyle({opacity:show?1:0.05, fillOpacity:show?0.65:0.03}); });
+}
+
+async function initMap(){
+  leafletMap = L.map('map').setView([29.9639, -90.0407], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OpenStreetMap contributors', maxZoom:18}).addTo(leafletMap);
+  await renderLevel('precinct');
   document.getElementById('map-council').onchange = filterMap;
   document.getElementById('map-planning').onchange = filterMap;
+  document.querySelectorAll('.seg[data-level]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.seg[data-level]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderLevel(btn.dataset.level);
+    });
+  });
 }
 
 load();

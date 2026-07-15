@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ward Detail — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html" class="active">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+  </nav>
+</header>
+<main class="site">
+  <div id="content"><div class="th">Loading…</div></div>
+</main>
+</div>
+<script>
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function rateColor(r){ if(r==null) return '#999'; if(r<0.60) return '#a94442'; if(r<0.85) return '#b8963f'; return '#5f8f6d'; }
+
+const params = new URLSearchParams(window.location.search);
+const ward = params.get('ward');
+
+async function load(){
+  if(!ward){
+    document.getElementById('content').innerHTML = '<div class="card card-pad">No ward specified. Try a link like <code>ward-detail.html?ward=8</code>.</div>';
+    return;
+  }
+  const [precRes, volRes, evRes, partRes] = await Promise.all([
+    sb.from('precincts').select('*').eq('ward', ward),
+    sb.from('volunteers').select('*'),
+    sb.from('outreach_events').select('*'),
+    sb.from('community_partners').select('*'),
+  ]);
+
+  const precincts = precRes.data || [];
+  if(!precincts.length){
+    document.getElementById('content').innerHTML = `<div class="card card-pad">No precincts found for Ward ${ward}.</div>`;
+    return;
+  }
+
+  const pwSet = new Set(precincts.map(p=>p.precinct_ward));
+  const totalReg = precincts.reduce((s,p)=>s+(p.registered_voters||0),0);
+  const totalVap = precincts.reduce((s,p)=>s+(p.adult_population||0),0);
+  const unregistered = totalVap - totalReg;
+  const rate = totalVap ? totalReg/totalVap : null;
+
+  const volunteers = (volRes.data||[]).filter(v=> pwSet.has(v.home_precinct));
+  const events = (evRes.data||[]).filter(e=> pwSet.has(e.precinct_ward));
+
+  const neighborhoods = [...new Set(precincts.map(p=>p.neighborhood).filter(Boolean))];
+  function matchesWard(text){
+    if(!text) return false;
+    const t = text.toLowerCase();
+    return neighborhoods.some(n=> t.includes(n.toLowerCase()) || n.toLowerCase().includes(t));
+  }
+  const allPartners = partRes.data || [];
+  const exactMatches = allPartners.filter(p=> String(p.ward)===String(ward));
+  const textMatches = allPartners.filter(p=> p.ward==null && matchesWard(p.area_served));
+  const partners = [...exactMatches, ...textMatches];
+  const churches = partners.filter(p=>p.org_type==='Church/Faith Org');
+
+  const locationCounts = {};
+  events.forEach(e=>{ if(e.location){ locationCounts[e.location] = (locationCounts[e.location]||0)+1; } });
+  const recurringSites = Object.entries(locationCounts).filter(([loc,c])=>c>=2);
+
+  document.getElementById('content').innerHTML = `
+    <div class="page-title">Ward ${ward}</div>
+    <div class="card card-pad" style="margin-bottom:16px;background:#faf8f3;border-color:#e7e3da">
+      <span class="td-muted" style="font-size:12px">Partners tagged with an exact Ward on the Partner form count precisely. Older/untagged partners fall back to a neighborhood-name text match — approximate until tagged.</span>
+    </div>
+
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="card stat-card"><div class="th">Precincts</div><div class="stat-value">${precincts.length}</div></div>
+      <div class="card stat-card"><div class="th">Unregistered Adults</div><div class="stat-value">${unregistered.toLocaleString()}</div></div>
+      <div class="card stat-card"><div class="th">Registration Rate</div><div class="stat-value">${pct(rate)}</div></div>
+      <div class="card stat-card"><div class="th">Volunteers Nearby</div><div class="stat-value">${volunteers.length}</div></div>
+    </div>
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="card stat-card"><div class="th">Recurring Outreach Sites</div><div class="stat-value">${recurringSites.length}</div></div>
+      <div class="card stat-card"><div class="th">Churches (matched)</div><div class="stat-value">${churches.length}</div></div>
+      <div class="card stat-card"><div class="th">Community Partners (matched)</div><div class="stat-value">${partners.length}</div></div>
+      <div class="card stat-card"><div class="th">Events Logged</div><div class="stat-value">${events.length}</div></div>
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:16px">
+      <div class="card-title">Precincts in Ward ${ward}</div>
+      <table class="data-table">
+        <thead><tr class="th"><th style="padding:9px 0">Precinct</th><th>Neighborhood</th><th>Registered</th><th>Adult Pop.</th><th>Reg. Rate</th></tr></thead>
+        <tbody>
+        ${precincts.map(p=>`<tr class="td">
+          <td style="padding:9px 0"><a href="precinct-detail.html?pw=${encodeURIComponent(p.precinct_ward)}">${p.precinct_ward}</a></td>
+          <td class="td-muted">${p.neighborhood||''}</td><td>${p.registered_voters}</td><td>${p.adult_population||'—'}</td>
+          <td><span class="chip" style="background:${rateColor(p.registration_rate)}22;color:${rateColor(p.registration_rate)}">${pct(p.registration_rate)}</span></td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card card-pad">
+        <div class="card-title">Volunteers Nearby</div>
+        ${volunteers.length ? volunteers.map(v=>`<div class="td" style="padding:6px 0;border-bottom:1px solid #f5f2ea">${v.name} <span class="td-muted">(${v.home_precinct})</span></div>`).join('') : '<div class="td-muted">None yet.</div>'}
+      </div>
+      <div class="card card-pad">
+        <div class="card-title">Outreach Sites &amp; Partners (matched)</div>
+        ${recurringSites.length ? `<div class="td-muted" style="font-size:11px;margin-bottom:6px">RECURRING SITES</div>` + recurringSites.map(([loc,c])=>`<div class="td" style="padding:4px 0">${loc} <span class="td-muted">(${c} events)</span></div>`).join('') : ''}
+        ${partners.length ? `<div class="td-muted" style="font-size:11px;margin:10px 0 6px">PARTNERS</div>` + partners.map(p=>`<div class="td" style="padding:4px 0">${p.org_name}</div>`).join('') : ''}
+        ${!recurringSites.length && !partners.length ? '<div class="td-muted">Nothing matched yet.</div>' : ''}
+      </div>
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>
