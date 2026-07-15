@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html" class="active">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="page-title" style="margin:0">Coverage Map</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <select id="map-council"><option value="">All Council Districts</option></select>
+      <select id="map-planning"><option value="">All Planning Districts</option></select>
+    </div>
+  </div>
+  <div class="legend-float" style="margin-bottom:10px;display:inline-flex">
+    <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#a94442"></span>Under 60%</span>
+    <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#b8963f"></span>60&ndash;85%</span>
+    <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#5f8f6d"></span>85%+</span>
+  </div>
+  <div id="map" style="height:600px"></div>
+</main>
+</div>
+<script>
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function rateColor(r){ if(r==null) return '#999'; if(r<0.60) return '#a94442'; if(r<0.85) return '#b8963f'; return '#5f8f6d'; }
+
+let DATA = {precincts:[], volunteers:[], events:[]};
+
+async function load(){
+  const [prec, vol, ev] = await Promise.all([
+    sb.from('precincts').select('*'),
+    sb.from('volunteers').select('*'),
+    sb.from('outreach_events').select('*'),
+  ]);
+  DATA.precincts = (prec.data||[]).map(p=>({
+    pw:p.precinct_ward, ward:p.ward, council:p.council_district, planning:p.planning_district,
+    neighborhood:p.neighborhood, reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate,
+    polling:p.polling_location
+  }));
+  DATA.volunteers = vol.data||[];
+  DATA.events = ev.data||[];
+  populateFilters();
+  initMap();
+}
+
+function populateFilters(){
+  const councils = [...new Set(DATA.precincts.map(p=>p.council))].sort();
+  const plannings = [...new Set(DATA.precincts.map(p=>p.planning))].sort();
+  councils.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; document.getElementById('map-council').appendChild(o); });
+  plannings.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; document.getElementById('map-planning').appendChild(o); });
+}
+
+function popupHtml(p){
+  const events = DATA.events.filter(e=>e.precinct_ward===p.pw);
+  const vols = DATA.volunteers.filter(v=>v.home_precinct===p.pw);
+  let html = `<strong>${p.pw}</strong><br>Ward ${p.ward} &middot; Council ${p.council} &middot; ${p.planning}<br>${p.neighborhood||''}<br>
+    Registered: ${p.reg} / Adult Pop: ${p.vap||'—'}<br>Reg. Rate: <strong>${pct(p.rate)}</strong><br>Polling: ${p.polling||''}`;
+  if(vols.length) html += `<br><br><strong>Volunteers here (${vols.length}):</strong><br>` + vols.map(v=>v.name).join(', ');
+  if(events.length) html += `<br><br><strong>Events logged (${events.length}):</strong><br>` + events.slice(0,5).map(e=>`${e.event_date||''} — ${e.event_name}`).join('<br>');
+  return html;
+}
+
+async function initMap(){
+  const map = L.map('map').setView([29.9639, -90.0407], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OpenStreetMap contributors', maxZoom:18}).addTo(map);
+  const byPw = {}; DATA.precincts.forEach(p=> byPw[p.pw]=p);
+  const res = await fetch('precinct_boundaries.geojson');
+  const gj = await res.json();
+  const layers = [];
+  const geoLayer = L.geoJSON(gj, {
+    style: f=>{ const p = byPw[f.properties.precinct_ward]; return {color:'#0b1f3a', weight:1, fillColor:p?rateColor(p.rate):'#999', fillOpacity:0.65}; },
+    onEachFeature:(f,layer)=>{
+      const p = byPw[f.properties.precinct_ward]; if(!p) return;
+      layer.bindPopup(popupHtml(p));
+      layer._council = p.council; layer._planning = p.planning;
+      layer.on('mouseover', ()=>layer.setStyle({weight:3,fillOpacity:0.85}));
+      layer.on('mouseout', ()=>layer.setStyle({weight:1,fillOpacity:0.65}));
+      layers.push(layer);
+    }
+  }).addTo(map);
+  map.fitBounds(geoLayer.getBounds());
+  function filterMap(){
+    const c = document.getElementById('map-council').value, pl = document.getElementById('map-planning').value;
+    layers.forEach(l=>{ const show=(!c||l._council===c)&&(!pl||l._planning===pl); l.setStyle({opacity:show?1:0.05, fillOpacity:show?0.65:0.03}); });
+  }
+  document.getElementById('map-council').onchange = filterMap;
+  document.getElementById('map-planning').onchange = filterMap;
+}
+
+load();
+</script>
+</body>
+</html>

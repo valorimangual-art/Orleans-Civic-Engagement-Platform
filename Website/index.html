@@ -1,16 +1,161 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Orleans Civic Engagement Platform</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 </head>
-
 <body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
 
-    <h1>Orleans Civic Engagement Platform</h1>
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html" class="active">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+  </nav>
+</header>
 
-    <p>Working together to help the city of New Olreans reach the potential it deserves</p>
-    <button>Explore the Map</button>
+<main class="site">
+  <div class="page-title">Overview</div>
 
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div class="stat-grid" id="stat-cards"></div>
+
+    <div class="card card-pad" style="position:relative;height:280px;overflow:hidden">
+      <div class="card-title" style="position:relative;z-index:2">Precinct Coverage Map</div>
+      <div id="mini-map" style="position:absolute;inset:16px;top:44px;border-radius:8px;overflow:hidden"></div>
+      <div class="legend-float" style="position:absolute;bottom:14px;right:20px;z-index:400">
+        <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#a94442"></span>Under 60%</span>
+        <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#b8963f"></span>60&ndash;85%</span>
+        <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#5f8f6d"></span>85%+</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:14px" id="mid-row-grid">
+      <div class="card card-pad">
+        <div class="card-title">Precinct Priority</div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="priority-mini"></div>
+        <a href="priority-list.html" class="link-more">View full priority list &rarr;</a>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title">Volunteer Status</div>
+        <div class="hint" style="margin:-6px 0 10px;color:#8a8578;font-size:11px">
+          Grouped by signup status &mdash; a real "training pipeline" (Orientation &rarr; Canvassing &rarr; Event Lead, etc.) needs a training-stage field we don't collect yet.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap" id="status-cols"></div>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin:0">Volunteer Availability &amp; Status</div>
+        <a href="volunteers.html" class="link-more" style="margin:0">View all volunteers &rarr;</a>
+      </div>
+      <table class="data-table">
+        <thead><tr class="th"><th>Name</th><th>Precinct</th><th>Status</th><th>Skills</th><th>Availability</th></tr></thead>
+        <tbody id="vol-rows"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</div>
+
+<script>
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function rateColor(r){
+  if(r==null) return '#999';
+  if(r<0.60) return '#a94442';
+  if(r<0.85) return '#b8963f';
+  return '#5f8f6d';
+}
+
+async function load(){
+  const [prec, vol, ev, poll] = await Promise.all([
+    sb.from('precincts').select('*'),
+    sb.from('volunteers').select('*'),
+    sb.from('outreach_events').select('*'),
+    sb.from('polling_locations').select('*'),
+  ]);
+  const precincts = (prec.data||[]).map(p=>({
+    pw:p.precinct_ward, reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate,
+    lat:p.lat, lon:p.lon
+  }));
+  const volunteers = vol.data||[];
+  const events = ev.data||[];
+
+  const totalReg = precincts.reduce((s,p)=>s+(p.reg||0),0);
+  const totalVap = precincts.reduce((s,p)=>s+(p.vap||0),0);
+  const rate = totalVap ? totalReg/totalVap : null;
+  const coveredPrecincts = new Set(events.map(e=>e.precinct_ward)).size;
+  const coveragePct = precincts.length ? (coveredPrecincts/precincts.length*100).toFixed(0)+'%' : '—';
+
+  document.getElementById('stat-cards').innerHTML = [
+    ['Registered Voters', totalReg.toLocaleString()],
+    ['Volunteers', volunteers.length],
+    ['Upcoming Events', events.length],
+    ['Precincts w/ an Event Logged', coveragePct],
+  ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${val}</div></div>`).join('');
+
+  const low = precincts.filter(p=>p.vap>=200 && p.rate!=null).sort((a,b)=>a.rate-b.rate).slice(0,4);
+  document.getElementById('priority-mini').innerHTML = low.map(p=>{
+    const level = p.rate<0.6?['High','chip-red']:p.rate<0.75?['Medium','chip-gold']:['Watch','chip-blue'];
+    return `<div style="display:flex;align-items:center;gap:10px">
+      <div class="td" style="flex:1">${p.pw}</div>
+      <span class="chip ${level[1]}">${level[0]}</span>
+    </div>`;
+  }).join('');
+
+  const statuses = ['New','Contacted','Active','Inactive'];
+  const statusColors = {New:'chip-blue', Contacted:'chip-gold', Active:'chip-green', Inactive:'chip-red'};
+  document.getElementById('status-cols').innerHTML = statuses.map(s=>{
+    const inStatus = volunteers.filter(v=>(v.status||'New')===s);
+    return `<div style="flex:1;min-width:120px;background:#faf8f3;border-radius:4px;padding:8px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font:700 11px 'Nunito',sans-serif;color:#0b1f3a">${s}</span>
+        <span class="chip chip-neutral" style="font-size:9.5px">${inStatus.length}</span>
+      </div>
+      ${inStatus.slice(0,4).map(v=>`<div style="background:#fff;border:1px solid #eee;border-radius:3px;padding:6px 8px;font:600 11px 'Nunito',sans-serif">${v.name}</div>`).join('')}
+    </div>`;
+  }).join('');
+
+  document.getElementById('vol-rows').innerHTML = volunteers.slice(0,8).map(v=>`
+    <tr class="td">
+      <td>${v.name||''}</td>
+      <td class="td-muted">${v.home_precinct||''}</td>
+      <td><span class="chip ${statusColors[v.status]||'chip-neutral'}">${v.status||'New'}</span></td>
+      <td class="td-muted">${v.skills||''}</td>
+      <td class="td-muted">${v.availability||''}</td>
+    </tr>`).join('');
+
+  initMiniMap(precincts);
+}
+
+async function initMiniMap(precincts){
+  const map = L.map('mini-map', {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false}).setView([29.9639, -90.0407], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18}).addTo(map);
+  const byPw = {}; precincts.forEach(p=> byPw[p.pw]=p);
+  const res = await fetch('precinct_boundaries.geojson');
+  const gj = await res.json();
+  const layer = L.geoJSON(gj, {
+    style: f=>{ const p = byPw[f.properties.precinct_ward]; return {color:'#0b1f3a', weight:0.5, fillColor:p?rateColor(p.rate):'#999', fillOpacity:0.7}; }
+  }).addTo(map);
+  map.fitBounds(layer.getBounds());
+}
+
+load();
+</script>
 </body>
 </html>

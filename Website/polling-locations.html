@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polling Locations — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html" class="active">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+  </nav>
+</header>
+<main class="site">
+  <div class="page-title">Polling Locations</div>
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Search polling location or address...">
+  </div>
+  <div class="th" id="count" style="margin-bottom:8px"></div>
+  <div class="card" style="overflow-x:auto">
+    <table class="data-table" style="min-width:700px">
+      <thead><tr class="th"><th style="padding:10px 12px">Location</th><th>Address</th><th>Precincts Served</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+</div>
+<script>
+let DATA = [];
+async function load(){
+  const { data } = await sb.from('polling_locations').select('*');
+  DATA = data||[];
+  render();
+}
+function render(){
+  const q = document.getElementById('search').value.toLowerCase();
+  let rows = DATA.filter(p=> !q || (p.location_name||'').toLowerCase().includes(q) || (p.address||'').toLowerCase().includes(q));
+  document.getElementById('count').textContent = rows.length + ' of ' + DATA.length + ' locations';
+  document.getElementById('rows').innerHTML = rows.map(p=>`<tr class="td">
+    <td style="padding:9px 12px">${p.location_name||''}</td><td class="td-muted">${p.address||''}</td><td>${p.precincts_served_count||''}</td></tr>`).join('');
+}
+document.getElementById('search').addEventListener('input', render);
+load();
+</script>
+</body>
+</html>

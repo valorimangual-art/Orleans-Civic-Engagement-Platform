@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Priority List — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html" class="active">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+  </nav>
+</header>
+<main class="site">
+  <div class="page-title">Priority List</div>
+  <div class="card card-pad" style="margin-bottom:16px;background:#faf8f3;border-color:#e7e3da">
+    <span class="td-muted" style="font-size:12px">Precincts with 200+ adults, ranked by lowest registration rate first — where canvassing effort goes furthest.</span>
+  </div>
+  <div class="card" style="overflow-x:auto">
+    <table class="data-table" style="min-width:900px">
+      <thead><tr class="th">
+        <th style="padding:10px 12px">Rank</th><th>Precinct</th><th>Ward</th><th>Council</th><th>Planning Dist.</th>
+        <th>Registered</th><th>Adult Pop.</th><th>Reg. Rate</th><th>Polling Location</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+</div>
+<script>
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function rateColor(r){ if(r==null) return '#999'; if(r<0.60) return '#a94442'; if(r<0.85) return '#b8963f'; return '#5f8f6d'; }
+
+async function load(){
+  const { data } = await sb.from('precincts').select('*');
+  const precincts = (data||[]).map(p=>({
+    pw:p.precinct_ward, ward:p.ward, council:p.council_district, planning:p.planning_district,
+    reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate, polling:p.polling_location
+  }));
+  const low = precincts.filter(p=>p.vap>=200 && p.rate!=null).sort((a,b)=>a.rate-b.rate);
+  document.getElementById('rows').innerHTML = low.map((p,i)=>`<tr class="td">
+    <td style="padding:9px 12px">${i+1}</td><td>${p.pw}</td><td>${p.ward}</td><td>${p.council}</td><td>${p.planning}</td>
+    <td>${p.reg}</td><td>${p.vap}</td><td><span class="chip" style="background:${rateColor(p.rate)}22;color:${rateColor(p.rate)}">${pct(p.rate)}</span></td>
+    <td class="td-muted">${p.polling||''}</td></tr>`).join('');
+}
+load();
+</script>
+</body>
+</html>
