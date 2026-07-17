@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partners — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html" class="active">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+    <a href="voter-tracking.html">Voter Tracking</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="page-title" style="margin:0">Community Partners</div>
+    <a href="partner-form.html"><button class="primary">+ Add Partner Org</button></a>
+  </div>
+  <div class="th" id="count" style="margin-bottom:12px"></div>
+  <div id="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px"></div>
+</main>
+</div>
+<script>
+const statusColors = {'Active Partner':'#3f6b48','Meeting Scheduled':'#7d652a','Contacted':'#b8963f','Not Contacted':'#999'};
+const swatches = ['#0b1f3a','#2560b0','#6a3fc0','#3f6b48','#8f3b39','#7d652a'];
+async function load(){
+  const { data } = await sb.from('community_partners').select('*').order('created_at',{ascending:false});
+  const partners = data||[];
+  document.getElementById('count').textContent = partners.length + ' partner organizations';
+  document.getElementById('grid').innerHTML = partners.map((p,i)=>{
+    const c = statusColors[p.status]||'#999';
+    const href = p.partner_uid ? `partner-detail.html?p=${encodeURIComponent(p.partner_uid)}` : null;
+    return `<div class="card card-pad" ${href?`style="cursor:pointer" onclick="location.href='${href}'"`:''}>
+      <div style="width:36px;height:36px;border-radius:6px;background:${swatches[i%swatches.length]};margin-bottom:10px"></div>
+      <div style="font:800 14px 'Nunito',sans-serif;color:#0b1f3a;margin-bottom:4px">${p.org_name||''}</div>
+      <div class="td-muted" style="font-size:12px;margin-bottom:8px">${p.contact_name||''} ${p.contact_info||''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="chip" style="background:${c}22;color:${c}">${p.status||''}</span>
+        <span class="td-muted" style="font-size:11px">${p.org_type||''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+load();
+</script>
+</body>
+</html>

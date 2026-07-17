@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html" class="active">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+    <a href="voter-tracking.html">Voter Tracking</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+    <div class="page-title" style="margin:0">Coverage Map</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="seg-group" id="level-seg"></div>
+      <div class="seg-group" id="metric-seg"></div>
+    </div>
+  </div>
+  <div class="toolbar" id="district-filters" style="margin-bottom:4px">
+    <select id="map-council"><option value="">All Council Districts</option></select>
+    <select id="map-planning"><option value="">All Planning Districts</option></select>
+  </div>
+  <div class="legend-float" style="margin-bottom:10px;display:inline-flex">
+    <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#a94442"></span>Needs attention</span>
+    <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#b8963f"></span>Moderate</span>
+    <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#5f8f6d"></span>On track</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px" id="map-grid">
+    <div class="card card-pad">
+      <div id="map" style="height:480px"></div>
+    </div>
+    <div class="card card-pad" id="zone-panel"></div>
+  </div>
+</main>
+</div>
+<script>
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function rateColor(r){ if(r==null) return '#999'; if(r<0.60) return '#a94442'; if(r<0.85) return '#b8963f'; return '#5f8f6d'; }
+
+let DATA = {precincts:[], volunteers:[]};
+let GROUPS = {precinct:{}, ward:{}, neighborhood:{}};
+let layersArr = [];
+const state = { level:'ward', metric:'priority', selectedKeys:new Set() };
+
+const LEVELS = [['ward','Wards'],['neighborhood','Neighborhoods'],['precinct','Precincts']];
+const METRICS = [['priority','Priority'],['unregPct','Unregistered %'],['regPct','Registration %'],['coverage','Volunteer Coverage']];
+
+async function load(){
+  const [prec, vol] = await Promise.all([
+    sb.from('precincts').select('*'),
+    sb.from('volunteers').select('*'),
+  ]);
+  DATA.precincts = (prec.data||[]).map(p=>({
+    pw:p.precinct_ward, ward:p.ward, council:p.council_district, planning:p.planning_district,
+    neighborhood:p.neighborhood, reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate,
+    polling:p.polling_location
+  }));
+  DATA.volunteers = vol.data||[];
+  buildGroups();
+  populateFilters();
+  renderControls();
+  toggleDistrictFilters();
+  renderPanel();
+  await initMap();
+}
+
+function groupKeyFor(level, p){
+  if(level==='precinct') return p.pw;
+  if(level==='ward') return String(p.ward);
+  return (p.neighborhood && p.neighborhood.trim()) ? p.neighborhood : 'Unspecified';
+}
+
+function buildGroups(){
+  const volsByPw = {};
+  DATA.volunteers.forEach(v=>{ if(!v.home_precinct) return; (volsByPw[v.home_precinct] = volsByPw[v.home_precinct]||[]).push(v); });
+
+  function makeGroup(key, label, precincts){
+    const reg = precincts.reduce((s,p)=>s+(p.reg||0),0);
+    const vap = precincts.reduce((s,p)=>s+(p.vap||0),0);
+    const rate = vap ? reg/vap : null;
+    const volCount = precincts.reduce((s,p)=> s+((volsByPw[p.pw]||[]).length), 0);
+    return {
+      key, label, count:precincts.length, reg, vap, rate, volCount,
+      unreg: vap ? vap-reg : null,
+      priorityScore: rate!=null ? Math.round((1-rate)*100) : null,
+    };
+  }
+
+  const byLevel = {precinct:{}, ward:{}, neighborhood:{}};
+  ['precinct','ward','neighborhood'].forEach(level=>{
+    const buckets = {};
+    DATA.precincts.forEach(p=>{
+      const k = groupKeyFor(level, p);
+      (buckets[k] = buckets[k] || []).push(p);
+    });
+    Object.keys(buckets).forEach(k=>{
+      const label = level==='ward' ? 'Ward '+k : level==='precinct' ? k : k;
+      byLevel[level][k] = makeGroup(k, label, buckets[k]);
+    });
+  });
+  GROUPS = byLevel;
+}
+
+function tierColor(metric, g){
+  if(!g) return '#999';
+  if(metric==='priority' || metric==='regPct') return rateColor(g.rate);
+  if(metric==='unregPct'){
+    if(g.rate==null) return '#999';
+    const u = 1-g.rate;
+    return u>=0.40 ? '#a94442' : u>=0.15 ? '#b8963f' : '#5f8f6d';
+  }
+  if(metric==='coverage'){
+    const per = g.count ? g.volCount/g.count : 0;
+    return per<0.5 ? '#a94442' : per<1.5 ? '#b8963f' : '#5f8f6d';
+  }
+  return '#999';
+}
+
+function styleForP(p){
+  if(!p) return {color:'#0b1f3a', weight:1, fillColor:'#999', fillOpacity:0.65};
+  const key = groupKeyFor(state.level, p);
+  const g = GROUPS[state.level][key];
+  const isSelected = state.selectedKeys.has(key);
+  return { color:'#0b1f3a', weight:isSelected?3:1, fillColor:tierColor(state.metric, g), fillOpacity:0.65 };
+}
+
+function restyleAll(){ layersArr.forEach(l=> l.setStyle(styleForP(l._p))); }
+
+function levelNoun(){ return state.level==='ward' ? 'ward' : state.level==='neighborhood' ? 'neighborhood' : 'precinct'; }
+
+function statDefsFor(level){
+  return level==='precinct' ? [
+    ['Registered', g=>g.reg.toLocaleString()],
+    ['Unregistered', g=>g.unreg!=null ? g.unreg.toLocaleString() : '—'],
+    ['Registration %', g=>pct(g.rate)],
+    ['Volunteers Assigned', g=>g.volCount],
+    ['Priority Score', g=>g.priorityScore ?? '—'],
+  ] : [
+    ['Precincts', g=>g.count],
+    ['Unregistered Adults', g=>g.unreg!=null ? g.unreg.toLocaleString() : '—'],
+    ['Registration %', g=>pct(g.rate)],
+    ['Volunteers Nearby', g=>g.volCount],
+    ['Priority Score', g=>g.priorityScore ?? '—'],
+  ];
+}
+
+function detailHref(level, key){
+  if(level==='precinct') return 'precincts.html?pw='+encodeURIComponent(key);
+  if(level==='ward') return 'precincts.html?ward='+encodeURIComponent(key);
+  return 'precincts.html?q='+encodeURIComponent(key);
+}
+
+function renderPanel(){
+  const panel = document.getElementById('zone-panel');
+  const keys = [...state.selectedKeys];
+  const groups = keys.map(k=> GROUPS[state.level][k]).filter(Boolean);
+
+  if(groups.length===0){
+    panel.innerHTML = `<div style="font:800 15px 'Nunito',sans-serif;color:#0b1f3a">Click a zone</div>
+      <div class="td-muted" style="font-size:12px;line-height:1.5;margin-top:8px">Select any ${levelNoun()} on the map to see its registration rate, unregistered adults, volunteer coverage, and priority score. Select more than one to compare.</div>`;
+    return;
+  }
+
+  const defs = statDefsFor(state.level);
+
+  if(groups.length===1){
+    const g = groups[0];
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+        <div style="font:800 18px 'Nunito',sans-serif;color:#0b1f3a">${g.label}</div>
+        <button type="button" class="link-more" style="margin:0;background:none;border:none;cursor:pointer" id="clear-sel">Clear</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+        ${defs.map(([label,fn])=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #f0ece2;padding-bottom:7px">
+          <span class="th">${label}</span><span class="td">${fn(g)}</span></div>`).join('')}
+      </div>
+      <a href="${detailHref(state.level, g.key)}" class="link-more">View full detail &rarr;</a>`;
+  } else {
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font:800 15px 'Nunito',sans-serif;color:#0b1f3a">Comparing ${groups.length} ${levelNoun()}s</div>
+        <button type="button" class="link-more" style="margin:0;background:none;border:none;cursor:pointer" id="clear-sel">Clear all</button>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="data-table" style="min-width:${180+groups.length*140}px">
+        <thead><tr class="th">
+          <th style="padding:6px 8px 8px 0"></th>
+          ${groups.map(g=>`<th style="padding:6px 8px;white-space:nowrap">${g.label} <span data-remove="${g.key}" title="Remove from compare" style="cursor:pointer;color:#a94442;font-weight:800;margin-left:4px">&times;</span></th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${defs.map(([label,fn])=>`<tr class="td"><td class="th" style="padding:7px 8px 7px 0;white-space:nowrap">${label}</td>${groups.map(g=>`<td style="padding:7px 8px">${fn(g)}</td>`).join('')}</tr>`).join('')}
+          <tr class="td"><td></td>${groups.map(g=>`<td style="padding:7px 8px"><a href="${detailHref(state.level, g.key)}" class="link-more" style="margin:0">Full detail &rarr;</a></td>`).join('')}</tr>
+        </tbody>
+      </table>
+      </div>`;
+    panel.querySelectorAll('[data-remove]').forEach(el=> el.onclick = ()=>{
+      state.selectedKeys.delete(el.dataset.remove);
+      restyleAll();
+      renderPanel();
+    });
+  }
+  const clearBtn = document.getElementById('clear-sel');
+  if(clearBtn) clearBtn.onclick = ()=>{ state.selectedKeys.clear(); restyleAll(); renderPanel(); };
+}
+
+function renderControls(){
+  document.getElementById('level-seg').innerHTML = LEVELS.map(([k,label])=>
+    `<button type="button" class="seg ${state.level===k?'active':''}" data-level="${k}">${label}</button>`).join('');
+  document.getElementById('metric-seg').innerHTML = METRICS.map(([k,label])=>
+    `<button type="button" class="seg ${state.metric===k?'active':''}" data-metric="${k}">${label}</button>`).join('');
+
+  document.querySelectorAll('#level-seg .seg').forEach(b=> b.onclick = ()=>{
+    state.level = b.dataset.level;
+    state.selectedKeys.clear();
+    toggleDistrictFilters();
+    renderControls();
+    restyleAll();
+    renderPanel();
+  });
+  document.querySelectorAll('#metric-seg .seg').forEach(b=> b.onclick = ()=>{
+    state.metric = b.dataset.metric;
+    renderControls();
+    restyleAll();
+  });
+}
+
+function toggleDistrictFilters(){
+  const show = state.level==='precinct';
+  document.getElementById('district-filters').style.display = show ? 'flex' : 'none';
+  if(!show){
+    document.getElementById('map-council').value = '';
+    document.getElementById('map-planning').value = '';
+    filterMap();
+  }
+}
+
+function populateFilters(){
+  const councils = [...new Set(DATA.precincts.map(p=>p.council))].sort();
+  const plannings = [...new Set(DATA.precincts.map(p=>p.planning))].sort();
+  councils.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; document.getElementById('map-council').appendChild(o); });
+  plannings.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; document.getElementById('map-planning').appendChild(o); });
+  document.getElementById('map-council').onchange = filterMap;
+  document.getElementById('map-planning').onchange = filterMap;
+}
+
+function filterMap(){
+  const c = document.getElementById('map-council').value, pl = document.getElementById('map-planning').value;
+  layersArr.forEach(l=>{
+    const p = l._p;
+    const show = (!c||p.council===c) && (!pl||p.planning===pl);
+    l.setStyle({opacity:show?1:0.05, fillOpacity:show?0.65:0.03});
+  });
+}
+
+async function initMap(){
+  const map = L.map('map').setView([29.9639, -90.0407], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OpenStreetMap contributors', maxZoom:18}).addTo(map);
+  const byPw = {}; DATA.precincts.forEach(p=> byPw[p.pw]=p);
+  const res = await fetch('precinct_boundaries.geojson');
+  const gj = await res.json();
+  const geoLayer = L.geoJSON(gj, {
+    style: f => styleForP(byPw[f.properties.precinct_ward]),
+    onEachFeature: (f, layer) => {
+      const p = byPw[f.properties.precinct_ward]; if(!p) return;
+      layer._p = p;
+      layer.on('click', ()=>{
+        const key = groupKeyFor(state.level, p);
+        if(state.selectedKeys.has(key)) state.selectedKeys.delete(key); else state.selectedKeys.add(key);
+        restyleAll();
+        renderPanel();
+      });
+      layer.on('mouseover', ()=> layer.setStyle({weight:3}));
+      layer.on('mouseout', ()=> layer.setStyle(styleForP(layer._p)));
+      layersArr.push(layer);
+    }
+  }).addTo(map);
+  requestAnimationFrame(()=>{
+    map.invalidateSize();
+    map.fitBounds(geoLayer.getBounds());
+  });
+}
+
+load();
+</script>
+</body>
+</html>

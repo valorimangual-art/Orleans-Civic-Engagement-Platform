@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Voter Contact — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="voter-tracking.html">&larr; Back to Voter Tracking</a></nav>
+</header>
+<main class="site">
+  <div class="page-title">Log Voter Contact</div>
+  <div class="card card-pad" style="margin-bottom:16px;background:#faf8f3;border-color:#e7e3da">
+    <span class="td-muted" style="font-size:12px">Use this for individual, person-by-person logging during a canvass or tabling shift. If your team prefers quick per-event totals instead, use the counts on the Log Event form.</span>
+  </div>
+  <div class="form-wrap">
+    <div id="form-view">
+      <form id="cform">
+        <div class="field"><label>Contact Date</label><input type="date" id="contact_date"></div>
+        <div class="field"><label>Precinct/Ward</label><input type="text" id="precinct_ward" placeholder="e.g. W08-P12"></div>
+        <div class="field"><label>Event/Canvass Name</label><input type="text" id="event_name" placeholder="e.g. Marigny Saturday Canvass"></div>
+        <div class="field"><label>Contact Name</label><input type="text" id="contact_name"></div>
+        <div class="field"><label>Outcome *</label>
+          <select id="outcome" required>
+            <option value="">Select one</option>
+            <option>New Registration</option>
+            <option>Already Registered</option>
+            <option>Inactive - Reactivated</option>
+            <option>Inactive - Not Reactivated</option>
+            <option>Declined</option>
+          </select>
+        </div>
+        <div class="field"><label>Notes</label><textarea id="notes"></textarea></div>
+        <button type="submit" class="primary">Submit</button>
+        <div id="err" style="color:#8f3b39;margin-top:12px;"></div>
+      </form>
+    </div>
+    <div id="success-view" style="display:none">
+      <div class="card card-pad" style="border-color:#3f6b48;background:#e3ece3">
+        <div style="font:800 16px 'Nunito',sans-serif;color:#3f6b48">Logged!</div>
+        <p class="td">Contact added to the tracker.</p>
+        <p><a href="voter-contact-form.html">Log another contact</a> &middot; <a href="voter-tracking.html">Back to Voter Tracking</a></p>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+document.getElementById('cform').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const row = {
+    contact_date: document.getElementById('contact_date').value || null,
+    precinct_ward: document.getElementById('precinct_ward').value,
+    event_name: document.getElementById('event_name').value,
+    contact_name: document.getElementById('contact_name').value,
+    outcome: document.getElementById('outcome').value,
+    notes: document.getElementById('notes').value
+  };
+  const { error } = await sb.from('voter_contacts').insert([row]);
+  if(error){ document.getElementById('err').textContent = 'Something went wrong: ' + error.message; return; }
+  document.getElementById('form-view').style.display='none';
+  document.getElementById('success-view').style.display='block';
+});
+</script>
+</body>
+</html>

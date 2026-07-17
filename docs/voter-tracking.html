@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voter Tracking — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+    <a href="voter-tracking.html" class="active">Voter Tracking</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="page-title" style="margin:0">Voter Tracking</div>
+    <a href="voter-contact-form.html"><button class="primary">+ Log Voter Contact</button></a>
+  </div>
+  <div class="card card-pad" style="margin-bottom:16px;background:#faf8f3;border-color:#e7e3da">
+    <span class="td-muted" style="font-size:12px">Tracks voter registration progress against what's actually happening at events and canvasses &mdash; forms collected, plus people reached who didn't realize they were already registered or had gone inactive. Fed by two sources: quick per-event totals logged on the <a href="event-form.html">Log Event</a> form, and/or the individual <a href="voter-contact-form.html">Log Voter Contact</a> form. Use whichever fits your team's workflow.</span>
+  </div>
+
+  <div class="stat-grid" id="stat-cards" style="margin-bottom:18px"></div>
+
+  <div class="card card-pad" style="margin-bottom:18px">
+    <div class="card-title">Event Log Totals by Precinct/Ward</div>
+    <div class="hint" style="margin:-4px 0 10px;color:#8a8578;font-size:11px">From per-event quick counts logged on the Events page. Registered/Unregistered baseline comes from the precinct roll.</div>
+    <div id="events-rollup-empty" class="td-muted" style="font-size:13px;display:none">No events logged with a precinct/ward yet.</div>
+    <div style="overflow-x:auto">
+    <table class="data-table" style="min-width:820px" id="events-rollup-table">
+      <thead><tr class="th">
+        <th style="padding:10px 12px">Precinct/Ward</th><th>Registered</th><th>Unregistered</th><th>Reg. Rate</th>
+        <th>Events Logged</th><th>Forms Collected</th><th>Found Already Reg.</th><th>Found Inactive</th>
+      </tr></thead>
+      <tbody id="events-rollup-rows"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:18px">
+    <div class="card-title">Individual Contact Log by Precinct/Ward</div>
+    <div class="hint" style="margin:-4px 0 10px;color:#8a8578;font-size:11px">From person-by-person entries logged via Log Voter Contact.</div>
+    <div id="contacts-rollup-empty" class="td-muted" style="font-size:13px;display:none">No individual voter contacts logged yet.</div>
+    <div style="overflow-x:auto">
+    <table class="data-table" style="min-width:820px" id="contacts-rollup-table">
+      <thead><tr class="th">
+        <th style="padding:10px 12px">Precinct/Ward</th><th>Contacts Logged</th><th>New Reg.</th><th>Already Reg.</th>
+        <th>Inactive &ndash; Reactivated</th><th>Inactive &ndash; Not Reactivated</th><th>Declined</th>
+      </tr></thead>
+      <tbody id="contacts-rollup-rows"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="card-title" style="margin:0">Recent Voter Contacts</div>
+      <a href="voter-contact-form.html" class="link-more" style="margin:0">+ Log a contact &rarr;</a>
+    </div>
+    <div id="contacts-empty" class="td-muted" style="font-size:13px;display:none">No individual voter contacts logged yet.</div>
+    <div style="overflow-x:auto">
+    <table class="data-table" style="min-width:760px">
+      <thead><tr class="th"><th style="padding:10px 12px">Date</th><th>Precinct/Ward</th><th>Event/Canvass</th><th>Contact</th><th>Outcome</th><th>Notes</th></tr></thead>
+      <tbody id="contacts-recent-rows"></tbody>
+    </table>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function rateColor(r){ if(r==null) return '#999'; if(r<0.60) return '#a94442'; if(r<0.85) return '#b8963f'; return '#5f8f6d'; }
+
+const OUTCOME_CHIP = {
+  'New Registration':'chip-green',
+  'Already Registered':'chip-blue',
+  'Inactive - Reactivated':'chip-gold',
+  'Inactive - Not Reactivated':'chip-red',
+  'Declined':'chip-neutral',
+};
+
+async function load(){
+  const [precRes, evRes, contactRes] = await Promise.all([
+    sb.from('precincts').select('*'),
+    sb.from('outreach_events').select('*'),
+    sb.from('voter_contacts').select('*').order('contact_date',{ascending:false}),
+  ]);
+  const precincts = precRes.data||[];
+  const events = evRes.data||[];
+  const contacts = contactRes.data||[];
+
+  const byPwPrecinct = {};
+  precincts.forEach(p=> byPwPrecinct[p.precinct_ward] = p);
+
+  const totalReg = precincts.reduce((s,p)=>s+(p.registered_voters||0),0);
+  const totalVap = precincts.reduce((s,p)=>s+(p.adult_population||0),0);
+  const totalUnreg = totalVap ? totalVap-totalReg : null;
+  const formsCollected = events.reduce((s,e)=>s+(e.new_registrations||0),0);
+  const eventFoundUnaware = events.reduce((s,e)=>s+(e.found_already_registered||0)+(e.found_inactive||0),0);
+  const contactFoundUnaware = contacts.filter(c=>c.outcome==='Already Registered'||c.outcome==='Inactive - Reactivated'||c.outcome==='Inactive - Not Reactivated').length;
+
+  document.getElementById('stat-cards').innerHTML = [
+    ['Adults Not Yet Registered', totalUnreg!=null ? totalUnreg.toLocaleString() : '—'],
+    ['Forms Collected (Event Log)', formsCollected.toLocaleString()],
+    ['Individual Contacts Logged', contacts.length.toLocaleString()],
+    ["Didn't Know Their Status", (eventFoundUnaware+contactFoundUnaware).toLocaleString()],
+  ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${val}</div></div>`).join('');
+
+  renderEventsRollup(events, byPwPrecinct);
+  renderContactsRollup(contacts);
+  renderRecentContacts(contacts);
+}
+
+function renderEventsRollup(events, byPwPrecinct){
+  const byPw = {};
+  events.forEach(e=>{
+    const pw = (e.precinct_ward||'').trim(); if(!pw) return;
+    if(!byPw[pw]) byPw[pw] = {pw, events:0, forms:0, alreadyReg:0, inactive:0};
+    const b = byPw[pw];
+    b.events++;
+    b.forms += e.new_registrations||0;
+    b.alreadyReg += e.found_already_registered||0;
+    b.inactive += e.found_inactive||0;
+  });
+  const rows = Object.values(byPw).sort((a,b)=>a.pw.localeCompare(b.pw));
+  document.getElementById('events-rollup-empty').style.display = rows.length ? 'none' : 'block';
+  document.getElementById('events-rollup-table').style.display = rows.length ? '' : 'none';
+  document.getElementById('events-rollup-rows').innerHTML = rows.map(r=>{
+    const p = byPwPrecinct[r.pw];
+    const reg = p ? p.registered_voters : null;
+    const vap = p ? p.adult_population : null;
+    const rate = p ? p.registration_rate : null;
+    const unreg = (vap!=null && reg!=null) ? vap-reg : null;
+    return `<tr class="td">
+      <td style="padding:9px 12px">${r.pw}</td>
+      <td>${reg!=null ? reg.toLocaleString() : '—'}</td>
+      <td>${unreg!=null ? unreg.toLocaleString() : '—'}</td>
+      <td><span class="chip" style="background:${rateColor(rate)}22;color:${rateColor(rate)}">${pct(rate)}</span></td>
+      <td>${r.events}</td><td>${r.forms}</td><td>${r.alreadyReg}</td><td>${r.inactive}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderContactsRollup(contacts){
+  const byPw = {};
+  contacts.forEach(c=>{
+    const pw = (c.precinct_ward||'').trim(); if(!pw) return;
+    if(!byPw[pw]) byPw[pw] = {pw, total:0, newReg:0, alreadyReg:0, reactivated:0, notReactivated:0, declined:0};
+    const b = byPw[pw];
+    b.total++;
+    if(c.outcome==='New Registration') b.newReg++;
+    else if(c.outcome==='Already Registered') b.alreadyReg++;
+    else if(c.outcome==='Inactive - Reactivated') b.reactivated++;
+    else if(c.outcome==='Inactive - Not Reactivated') b.notReactivated++;
+    else if(c.outcome==='Declined') b.declined++;
+  });
+  const rows = Object.values(byPw).sort((a,b)=>a.pw.localeCompare(b.pw));
+  document.getElementById('contacts-rollup-empty').style.display = rows.length ? 'none' : 'block';
+  document.getElementById('contacts-rollup-table').style.display = rows.length ? '' : 'none';
+  document.getElementById('contacts-rollup-rows').innerHTML = rows.map(r=>`<tr class="td">
+    <td style="padding:9px 12px">${r.pw}</td><td>${r.total}</td><td>${r.newReg}</td><td>${r.alreadyReg}</td>
+    <td>${r.reactivated}</td><td>${r.notReactivated}</td><td>${r.declined}</td></tr>`).join('');
+}
+
+function renderRecentContacts(contacts){
+  document.getElementById('contacts-empty').style.display = contacts.length ? 'none' : 'block';
+  document.getElementById('contacts-recent-rows').innerHTML = contacts.slice(0,25).map(c=>`<tr class="td">
+    <td style="padding:9px 12px">${c.contact_date||''}</td><td class="td-muted">${c.precinct_ward||''}</td>
+    <td class="td-muted">${c.event_name||''}</td><td>${c.contact_name||''}</td>
+    <td><span class="chip ${OUTCOME_CHIP[c.outcome]||'chip-neutral'}">${c.outcome||''}</span></td>
+    <td class="td-muted">${c.notes||''}</td></tr>`).join('');
+}
+
+load();
+</script>
+</body>
+</html>

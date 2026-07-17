@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add Partner Org — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="partners.html">&larr; Back to Partners</a></nav>
+</header>
+<main class="site">
+  <div class="page-title">Community Partner Organization</div>
+  <div class="form-wrap">
+    <div id="form-view">
+      <form id="pform">
+        <div class="field"><label>Organization Name *</label><input type="text" id="org_name" required></div>
+        <div class="field"><label>Contact Name</label><input type="text" id="contact_name"></div>
+        <div class="field"><label>Contact Email/Phone</label><input type="text" id="contact_info"></div>
+        <div class="field"><label>Type</label>
+          <select id="org_type"><option value="">Select one</option>
+            <option>Nonprofit</option><option>Church/Faith Org</option><option>School</option><option>Business</option><option>Neighborhood Association</option><option>Other</option>
+          </select>
+        </div>
+        <div class="field"><label>Neighborhood/Precinct Served</label><input type="text" id="area_served"></div>
+        <div class="field"><label>Precincts/Wards Served</label><input type="text" id="precincts_served" placeholder="e.g. W08-P12, W08-P14, Ward 9">
+          <div class="hint">Comma-separated precinct or ward codes &mdash; powers the precinct lookup on this org's detail page.</div></div>
+        <div class="field"><label>Relationship Status</label>
+          <select id="status"><option>Not Contacted</option><option>Contacted</option><option>Meeting Scheduled</option><option>Active Partner</option></select>
+        </div>
+        <div class="field"><label>Notes</label><textarea id="notes"></textarea></div>
+        <button type="submit" class="primary">Submit</button>
+        <div id="err" style="color:#8f3b39;margin-top:12px;"></div>
+      </form>
+    </div>
+    <div id="success-view" style="display:none">
+      <div class="card card-pad" style="border-color:#3f6b48;background:#e3ece3">
+        <div style="font:800 16px 'Nunito',sans-serif;color:#3f6b48">Added!</div>
+        <p class="td">Partner organization added to the tracker.</p>
+        <p><a id="detail-link" href="partners.html">View org detail &rarr;</a> &middot; <a href="partner-form.html">Add another</a> &middot; <a href="partners.html">Back to Partners</a></p>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+document.getElementById('pform').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const row = {
+    org_name: document.getElementById('org_name').value, contact_name: document.getElementById('contact_name').value,
+    contact_info: document.getElementById('contact_info').value, org_type: document.getElementById('org_type').value,
+    area_served: document.getElementById('area_served').value, status: document.getElementById('status').value,
+    notes: document.getElementById('notes').value
+  };
+  const { data, error } = await sb.from('community_partners').insert([row]).select();
+  if(error){ document.getElementById('err').textContent = 'Something went wrong: ' + error.message; return; }
+
+  const partnerUid = data && data[0] && data[0].partner_uid;
+  const precinctsServed = document.getElementById('precincts_served').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(partnerUid && precinctsServed.length){
+    const linkRows = precinctsServed.map(pw=>({ partner_uid: partnerUid, precinct_ward: pw }));
+    const { error: linkErr } = await sb.from('partner_precincts').insert(linkRows);
+    if(linkErr){ document.getElementById('err').textContent = 'Partner saved, but precinct links failed: ' + linkErr.message; return; }
+  }
+  if(partnerUid){
+    document.getElementById('detail-link').href = 'partner-detail.html?p=' + encodeURIComponent(partnerUid);
+  }
+  document.getElementById('form-view').style.display='none';
+  document.getElementById('success-view').style.display='block';
+});
+</script>
+</body>
+</html>
