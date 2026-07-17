@@ -1,6 +1,41 @@
 {\rtf1\ansi\ansicpg1252\cocoartf2870
-\cocoatextscaling0\cocoaplatform0{\fonttbl}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\froman\fcharset0 Times-Bold;\f2\froman\fcharset0 Times-Roman;
+\f3\froman\fcharset0 Times-Italic;\f4\fmodern\fcharset0 Courier;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}}
 \margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 July 14, 2026 2:47pm\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Original problem:
+\f2\b0  You had 349 precincts and their current registered voter counts, but no accurate way to know what 
+\f3\i percentage
+\f2\i0  of eligible adults were registered \'97 the only population estimate available was a citywide total, spread evenly across all precincts. That produced a flat, fake ~87% registration rate everywhere, which was useless for targeting.\
+
+\f1\b The fix:
+\f2\b0 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0\cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Found the Louisiana Legislature's 2020 Census redistricting file, which reports 
+\f1\b Voting Age Population (VAP)
+\f2\b0  at the exact precinct (VTD) level \'97 not estimated, the actual Census count for each precinct's boundary.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 You downloaded the relevant file (
+\f4\fs26 LA_2026_01_BLOCK_DATA.zip
+\f2\fs24 ) yourself since it was too large for my tools to fetch directly.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Matched all 349 of your precincts to this file with zero mismatches, and confirmed the citywide total (306,196 adults) ties out exactly to the U.S. Census Bureau's own published number for Orleans Parish.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Result: every precinct now has a 
+\f1\b real
+\f2\b0  registration rate, ranging from about 34% to (in a few small precincts) slightly over 100% \'97 see note below on why that happens.\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 Why a few precincts show >100% registered:
+\f2\b0  The population figure is from the 2020 Census; registration is current (2026). In small precincts, enough population change since 2020 can push registered voters above the old population count. Not a data error \'97 just the age gap between the two sources.\
 }

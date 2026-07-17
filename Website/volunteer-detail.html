@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volunteer Detail — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="volunteers.html">&larr; Back to Volunteers</a></nav>
+</header>
+<main class="site">
+  <div id="not-found" class="card card-pad" style="display:none;background:#f2e3e2;border-color:#e3c9c8">
+    <span class="td" style="color:#8f3b39">Volunteer not found. Check <a href="volunteers.html">Volunteers</a>.</span>
+  </div>
+  <div id="content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:4px">
+      <div class="page-title" style="margin:0" id="v-name"></div>
+      <span class="chip" id="v-status"></span>
+    </div>
+    <div class="td-muted" id="v-sub" style="margin-bottom:18px"></div>
+
+    <div class="stat-grid" id="stat-cards" style="margin-bottom:18px"></div>
+
+    <div class="card card-pad" style="margin-bottom:18px">
+      <div class="card-title">Volunteer Info</div>
+      <div style="display:flex;flex-direction:column;gap:8px" id="info-rows"></div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="card-title">Shift History</div>
+      <div id="shifts-empty" class="td-muted" style="font-size:13px;display:none">No shifts logged for this volunteer yet.</div>
+      <div style="overflow-x:auto">
+      <table class="data-table" style="min-width:640px" id="shifts-table">
+        <thead><tr class="th"><th style="padding:10px 12px">Date</th><th>Event</th><th>Precinct/Ward</th><th>Role</th><th>Hours</th><th>Score</th></tr></thead>
+        <tbody id="shifts-rows"></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+const statusColors = {New:'#2560b0', Contacted:'#7d652a', Active:'#3f6b48', Inactive:'#8f3b39'};
+const params = new URLSearchParams(location.search);
+const volunteerUid = params.get('v');
+
+async function load(){
+  if(!volunteerUid){ document.getElementById('not-found').style.display='block'; return; }
+
+  const { data } = await sb.from('volunteers').select('*').eq('volunteer_uid', volunteerUid);
+  const v = (data||[])[0];
+  if(!v){ document.getElementById('not-found').style.display='block'; return; }
+
+  document.getElementById('content').style.display='block';
+  document.getElementById('v-name').textContent = v.name || '(unnamed)';
+  const c = statusColors[v.status]||'#666';
+  const statusEl = document.getElementById('v-status');
+  statusEl.textContent = v.status || 'New';
+  statusEl.style.background = c+'22'; statusEl.style.color = c;
+  document.getElementById('v-sub').textContent = [v.home_precinct, v.phone, v.email].filter(Boolean).join(' · ');
+
+  document.getElementById('info-rows').innerHTML = [
+    ['Skills', v.skills], ['Languages', v.languages], ['Transportation', v.transportation], ['Availability', v.availability],
+  ].map(([label,val])=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #f0ece2;padding-bottom:7px">
+    <span class="th">${label}</span><span class="td">${val||'—'}</span></div>`).join('');
+
+  await loadShifts();
+}
+
+async function loadShifts(){
+  const { data } = await sb.from('event_volunteers').select('*, outreach_events(event_name,event_date,precinct_ward,event_uid)').eq('volunteer_uid', volunteerUid).order('created_at',{ascending:false});
+  const rows = data||[];
+
+  const totalHours = rows.reduce((s,r)=>s+(parseFloat(r.hours)||0),0);
+  const scored = rows.filter(r=>r.score!=null);
+  const avgScore = scored.length ? (scored.reduce((s,r)=>s+r.score,0)/scored.length).toFixed(1) : '—';
+
+  document.getElementById('stat-cards').innerHTML = [
+    ['Total Shifts', rows.length],
+    ['Total Hours', totalHours],
+    ['Average Score', avgScore],
+  ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${val}</div></div>`).join('');
+
+  document.getElementById('shifts-empty').style.display = rows.length ? 'none' : 'block';
+  document.getElementById('shifts-table').style.display = rows.length ? '' : 'none';
+  document.getElementById('shifts-rows').innerHTML = rows.map(r=>{
+    const ev = r.outreach_events || {};
+    const eventLink = ev.event_uid ? `<a href="event-detail.html?event=${encodeURIComponent(ev.event_uid)}">${ev.event_name||'(untitled event)'}</a>` : (ev.event_name||'(untitled event)');
+    return `<tr class="td">
+      <td style="padding:9px 12px">${ev.event_date||''}</td><td>${eventLink}</td><td class="td-muted">${ev.precinct_ward||''}</td>
+      <td class="td-muted">${r.role||''}</td><td>${r.hours!=null ? r.hours : ''}</td><td>${r.score!=null ? r.score : ''}</td></tr>`;
+  }).join('');
+}
+
+load();
+</script>
+</body>
+</html>

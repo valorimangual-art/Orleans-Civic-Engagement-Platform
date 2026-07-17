@@ -2,39 +2,56 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Outreach Event Log — Orleans Civic Engagement Platform</title>
+<title>Log Event — Orleans Parish Civic OS</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 </head>
 <body>
-<header class="site"><div><h1>Outreach Event Log</h1><div class="tag">Orleans Civic Engagement Platform</div></div><a href="index.html" style="color:#FFD700">&larr; Back to dashboard</a></header>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="events.html">&larr; Back to Events</a></nav>
+</header>
 <main class="site">
-<div class="form-wrap">
-  <div id="form-view">
-    <form id="eform">
-      <div class="field"><label>Event Name *</label><input type="text" id="event_name" required></div>
-      <div class="field"><label>Date</label><input type="date" id="event_date"></div>
-      <div class="field"><label>Location/Address</label><input type="text" id="location"></div>
-      <div class="field"><label>Precinct/Ward</label><input type="text" id="precinct_ward" placeholder="e.g. W08-P12"></div>
-      <div class="field"><label>Type</label>
-        <select id="event_type"><option value="">Select one</option>
-          <option>Tabling</option><option>Canvassing</option><option>Voter Registration Drive</option><option>Community Event</option>
-        </select>
+  <div class="page-title">Outreach Event Log</div>
+  <div class="form-wrap">
+    <div id="form-view">
+      <form id="eform">
+        <div class="field"><label>Event Name *</label><input type="text" id="event_name" required></div>
+        <div class="field"><label>Date</label><input type="date" id="event_date"></div>
+        <div class="field"><label>Location/Address</label><input type="text" id="location"></div>
+        <div class="field"><label>Precinct/Ward</label><input type="text" id="precinct_ward" placeholder="e.g. W08-P12"></div>
+        <div class="field"><label>Type</label>
+          <select id="event_type"><option value="">Select one</option>
+            <option>Tabling</option><option>Canvassing</option><option>Voter Registration Drive</option><option>Community Event</option>
+          </select>
+        </div>
+        <div class="field"><label>Volunteers Present</label><input type="text" id="volunteers_present"></div>
+        <div class="field"><label>New Registrations Collected</label><input type="number" id="new_registrations"></div>
+        <div class="field"><label>Found Already Registered (unaware)</label><input type="number" id="found_already_registered">
+          <div class="hint">Contacts who didn't realize they were already registered.</div></div>
+        <div class="field"><label>Found Inactive (unaware)</label><input type="number" id="found_inactive">
+          <div class="hint">Contacts who didn't realize their registration had gone inactive.</div></div>
+        <div class="field"><label>Could Not Register &mdash; No ID</label><input type="number" id="could_not_register_no_id"></div>
+        <div class="field"><label>Could Not Register &mdash; Felony Conviction</label><input type="number" id="could_not_register_felony"></div>
+        <div class="field"><label>Could Not Register &mdash; Other Reason</label><input type="number" id="could_not_register_other">
+          <div class="hint">Use Notes below for detail on "other" reasons.</div></div>
+        <div class="field"><label>Notes</label><textarea id="notes"></textarea></div>
+        <button type="submit" class="primary">Submit</button>
+        <div id="err" style="color:#8f3b39;margin-top:12px;"></div>
+      </form>
+    </div>
+    <div id="success-view" style="display:none">
+      <div class="card card-pad" style="border-color:#3f6b48;background:#e3ece3">
+        <div style="font:800 16px 'Nunito',sans-serif;color:#3f6b48">Logged!</div>
+        <p class="td">Event added to the tracker.</p>
+        <p><a id="detail-link" href="events.html">Add volunteer roster &rarr;</a> &middot; <a href="event-form.html">Log another event</a> &middot; <a href="events.html">Back to Events</a></p>
       </div>
-      <div class="field"><label>Volunteers Present</label><input type="text" id="volunteers_present" placeholder="Names or count"></div>
-      <div class="field"><label>New Registrations Collected</label><input type="number" id="new_registrations"></div>
-      <div class="field"><label>Notes</label><textarea id="notes"></textarea></div>
-      <button type="submit" class="primary">Submit</button>
-      <div id="err" style="color:#ff8a80;margin-top:12px;"></div>
-    </form>
+    </div>
   </div>
-  <div id="success-view" style="display:none">
-    <div class="success-box"><h2>Logged!</h2><p>Event added to the tracker.</p>
-    <p><a href="event-form.html">Log another event</a> &middot; <a href="index.html">Back to dashboard</a></p></div>
-  </div>
-</div>
 </main>
+</div>
 <script>
 document.getElementById('eform').addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -46,12 +63,21 @@ document.getElementById('eform').addEventListener('submit', async (e)=>{
     event_type: document.getElementById('event_type').value,
     volunteers_present: document.getElementById('volunteers_present').value,
     new_registrations: document.getElementById('new_registrations').value ? parseInt(document.getElementById('new_registrations').value) : null,
+    found_already_registered: document.getElementById('found_already_registered').value ? parseInt(document.getElementById('found_already_registered').value) : null,
+    found_inactive: document.getElementById('found_inactive').value ? parseInt(document.getElementById('found_inactive').value) : null,
+    could_not_register_no_id: document.getElementById('could_not_register_no_id').value ? parseInt(document.getElementById('could_not_register_no_id').value) : null,
+    could_not_register_felony: document.getElementById('could_not_register_felony').value ? parseInt(document.getElementById('could_not_register_felony').value) : null,
+    could_not_register_other: document.getElementById('could_not_register_other').value ? parseInt(document.getElementById('could_not_register_other').value) : null,
     notes: document.getElementById('notes').value
   };
-  const { error } = await sb.from('outreach_events').insert([row]);
+  const { data, error } = await sb.from('outreach_events').insert([row]).select();
   if(error){ document.getElementById('err').textContent = 'Something went wrong: ' + error.message; return; }
+  if(data && data[0] && data[0].event_uid){
+    document.getElementById('detail-link').href = 'event-detail.html?event=' + encodeURIComponent(data[0].event_uid);
+  }
   document.getElementById('form-view').style.display='none';
   document.getElementById('success-view').style.display='block';
 });
 </script>
-</body></html>
+</body>
+</html>

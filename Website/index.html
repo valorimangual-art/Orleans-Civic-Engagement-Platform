@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Orleans Civic Engagement Platform</title>
+<title>Orleans Parish Civic OS</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -11,352 +11,152 @@
 <script src="supabase-config.js"></script>
 </head>
 <body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
 
 <header class="site">
-  <div>
-    <h1>Orleans Civic Engagement Platform</h1>
-    <div class="tag" id="asof">Loading live data&hellip;</div>
-  </div>
-  <button class="primary" id="refresh-btn">&#8635; Refresh</button>
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html" class="active">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+    <a href="voter-tracking.html">Voter Tracking</a>
+  </nav>
 </header>
 
-<nav class="site">
-  <button data-panel="overview" class="active">Overview</button>
-  <button data-panel="map">Map</button>
-  <button data-panel="precincts">Precincts</button>
-  <button data-panel="priority">Priority List</button>
-  <button data-panel="volunteers">Volunteers</button>
-  <button data-panel="polling">Polling Locations</button>
-  <button data-panel="events">Events</button>
-  <button data-panel="partners">Partners</button>
-  <button data-panel="opportunities">Opportunities</button>
-</nav>
-
 <main class="site">
+  <div class="page-title">Overview</div>
 
-  <div class="cards" style="margin:20px 0 8px" id="quick-forms">
-    <a class="card" href="volunteer-form.html" style="text-decoration:none"><div class="num">+</div><div class="label">Add Volunteer</div></a>
-    <a class="card" href="event-form.html" style="text-decoration:none"><div class="num">+</div><div class="label">Log Event</div></a>
-    <a class="card" href="partner-form.html" style="text-decoration:none"><div class="num">+</div><div class="label">Add Partner Org</div></a>
-    <a class="card" href="opportunity-form.html" style="text-decoration:none"><div class="num">+</div><div class="label">Scout Opportunity</div></a>
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div class="stat-grid" id="stat-cards"></div>
+
+    <div class="card card-pad" style="position:relative;height:280px;overflow:hidden">
+      <div class="card-title" style="position:relative;z-index:2">Precinct Coverage Map</div>
+      <div id="mini-map" style="position:absolute;inset:16px;top:44px;border-radius:8px;overflow:hidden"></div>
+      <div class="legend-float" style="position:absolute;bottom:14px;right:20px;z-index:400">
+        <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#a94442"></span>Under 60%</span>
+        <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#b8963f"></span>60&ndash;85%</span>
+        <span style="display:flex;align-items:center;gap:4px"><span class="legend-dot" style="background:#5f8f6d"></span>85%+</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:14px" id="mid-row-grid">
+      <div class="card card-pad">
+        <div class="card-title">Precinct Priority</div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="priority-mini"></div>
+        <a href="priority-list.html" class="link-more">View full priority list &rarr;</a>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title">Volunteer Status</div>
+        <div class="hint" style="margin:-6px 0 10px;color:#8a8578;font-size:11px">
+          Grouped by signup status &mdash; a real "training pipeline" (Orientation &rarr; Canvassing &rarr; Event Lead, etc.) needs a training-stage field we don't collect yet.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap" id="status-cols"></div>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin:0">Volunteer Availability &amp; Status</div>
+        <a href="volunteers.html" class="link-more" style="margin:0">View all volunteers &rarr;</a>
+      </div>
+      <table class="data-table">
+        <thead><tr class="th"><th>Name</th><th>Precinct</th><th>Status</th><th>Skills</th><th>Availability</th></tr></thead>
+        <tbody id="vol-rows"></tbody>
+      </table>
+    </div>
   </div>
-
-  <section id="panel-overview" class="panel active">
-    <div class="cards" id="overview-cards"></div>
-    <div class="note" id="rate-note"></div>
-    <h2 class="section">Lowest registration rate (top targets)</h2>
-    <div id="overview-priority" class="count">Loading&hellip;</div>
-  </section>
-
-  <section id="panel-map" class="panel">
-    <div class="toolbar">
-      <select id="map-council"><option value="">All Council Districts</option></select>
-      <select id="map-planning"><option value="">All Planning Districts</option></select>
-    </div>
-    <div class="legend">
-      <span><span class="dot" style="background:#B23A2E"></span> Under 60%</span>
-      <span><span class="dot" style="background:#D68A2C"></span> 60&ndash;75%</span>
-      <span><span class="dot" style="background:#C9A24B"></span> 75&ndash;85%</span>
-      <span><span class="dot" style="background:#3F7A5C"></span> 85%+</span>
-    </div>
-    <div id="map"></div>
-  </section>
-
-  <section id="panel-precincts" class="panel">
-    <div class="toolbar">
-      <input type="text" id="prec-search" placeholder="Search precinct, neighborhood, polling location...">
-      <select id="prec-ward"><option value="">All Wards</option></select>
-      <select id="prec-council"><option value="">All Council Districts</option></select>
-      <select id="prec-planning"><option value="">All Planning Districts</option></select>
-    </div>
-    <div class="count" id="prec-count"></div>
-    <div style="overflow-x:auto;">
-    <table id="prec-table">
-      <thead><tr>
-        <th data-key="pw">Precinct</th><th data-key="ward">Ward</th><th data-key="council">Council</th>
-        <th data-key="planning">Planning Dist.</th><th data-key="neighborhood">Neighborhood</th>
-        <th data-key="reg">Registered</th><th data-key="vap">Adult Pop.</th><th data-key="rate">Reg. Rate</th>
-        <th data-key="polling">Polling Location</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
-    </div>
-  </section>
-
-  <section id="panel-priority" class="panel">
-    <div class="note">Precincts with 200+ adults, sorted by lowest registration rate first.</div>
-    <div style="overflow-x:auto;">
-    <table id="priority-table">
-      <thead><tr>
-        <th>Rank</th><th>Precinct</th><th>Ward</th><th>Council</th><th>Planning Dist.</th>
-        <th>Registered</th><th>Adult Pop.</th><th>Reg. Rate</th><th>Polling Location</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
-    </div>
-  </section>
-
-  <section id="panel-volunteers" class="panel">
-    <p class="note">Add volunteers via the <a href="volunteer-form.html">Volunteer Sign-Up form</a>.</p>
-    <div class="count" id="vol-count"></div>
-    <div style="overflow-x:auto;">
-    <table id="vol-table"><thead><tr>
-      <th>Name</th><th>Phone</th><th>Email</th><th>Home Precinct</th><th>Skills</th><th>Transportation</th><th>Availability</th>
-    </tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <section id="panel-polling" class="panel">
-    <div class="toolbar"><input type="text" id="poll-search" placeholder="Search polling location or address..."></div>
-    <div class="count" id="poll-count"></div>
-    <div style="overflow-x:auto;">
-    <table id="poll-table"><thead><tr><th>Location</th><th>Address</th><th>Precincts Served</th></tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <section id="panel-events" class="panel">
-    <p class="note">Log tabling/canvassing shifts via the <a href="event-form.html">Outreach Event Log</a>.</p>
-    <div class="count" id="events-count"></div>
-    <div style="overflow-x:auto;">
-    <table id="events-table"><thead><tr>
-      <th>Date</th><th>Event</th><th>Location</th><th>Precinct/Ward</th><th>Type</th><th>Volunteers</th><th>New Reg.</th><th>Notes</th>
-    </tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <section id="panel-partners" class="panel">
-    <p class="note">Add partner orgs via the <a href="partner-form.html">Community Partner form</a>.</p>
-    <div class="count" id="partners-count"></div>
-    <div style="overflow-x:auto;">
-    <table id="partners-table"><thead><tr>
-      <th>Organization</th><th>Contact</th><th>Type</th><th>Area Served</th><th>Status</th><th>Notes</th>
-    </tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <section id="panel-opportunities" class="panel">
-    <p class="note">Scout new opportunities via the <a href="opportunity-form.html">Outreach Opportunity form</a>.</p>
-    <div class="count" id="opps-count"></div>
-    <div style="overflow-x:auto;">
-    <table id="opps-table"><thead><tr>
-      <th>Opportunity</th><th>Date</th><th>Location</th><th>Foot Traffic</th><th>Contact</th><th>Status</th><th>Notes</th>
-    </tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
 </main>
-
-<footer class="site">Live from Supabase &middot; hosted free on GitHub Pages &middot; no logins for viewers.</footer>
+</div>
 
 <script>
-let DATA = {precincts:[], volunteers:[], polling:[], events:[], partners:[], opportunities:[]};
-
-function pct(r){ return (r==null || isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
+function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
 function rateColor(r){
   if(r==null) return '#999';
-  if(r<0.60) return '#B23A2E';
-  if(r<0.75) return '#D68A2C';
-  if(r<0.85) return '#C9A24B';
-  return '#3F7A5C';
+  if(r<0.60) return '#a94442';
+  if(r<0.85) return '#b8963f';
+  return '#5f8f6d';
 }
 
-async function loadAll(){
-  document.getElementById('asof').textContent = 'Loading live data…';
-  const [prec, vol, poll, ev, part, opp] = await Promise.all([
+async function load(){
+  const [prec, vol, ev, poll] = await Promise.all([
     sb.from('precincts').select('*'),
-    sb.from('volunteers').select('*').order('created_at', {ascending:false}),
+    sb.from('volunteers').select('*'),
+    sb.from('outreach_events').select('*'),
     sb.from('polling_locations').select('*'),
-    sb.from('outreach_events').select('*').order('event_date', {ascending:false}),
-    sb.from('community_partners').select('*').order('created_at', {ascending:false}),
-    sb.from('outreach_opportunities').select('*').order('created_at', {ascending:false}),
   ]);
-  [prec, vol, poll, ev, part, opp].forEach(r=>{ if(r.error) console.error(r.error); });
-
-  DATA.precincts = (prec.data||[]).map(p=>({
-    pw: p.precinct_ward, ward: p.ward, council: p.council_district, planning: p.planning_district,
-    neighborhood: p.neighborhood, reg: p.registered_voters, vap: p.adult_population,
-    rate: p.registration_rate, polling: p.polling_location, lat: p.lat, lon: p.lon
+  const precincts = (prec.data||[]).map(p=>({
+    pw:p.precinct_ward, reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate,
+    lat:p.lat, lon:p.lon
   }));
-  DATA.volunteers = vol.data || [];
-  DATA.polling = poll.data || [];
-  DATA.events = ev.data || [];
-  DATA.partners = part.data || [];
-  DATA.opportunities = opp.data || [];
+  const volunteers = vol.data||[];
+  const events = ev.data||[];
 
-  document.getElementById('asof').textContent = 'Updated ' + new Date().toLocaleString() + ' · ' + DATA.precincts.length + ' precincts live';
-  renderAll();
-}
-document.getElementById('refresh-btn').addEventListener('click', loadAll);
-
-document.querySelectorAll('nav.site button').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('nav.site button').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-'+btn.dataset.panel).classList.add('active');
-    if(btn.dataset.panel==='map' && DATA.precincts.length){ initMap(); }
-  });
-});
-
-function renderAll(){
-  renderOverview(); renderPriority(); populateFilters(); renderPrecincts();
-  renderVolunteers(); renderPolling(); renderEvents(); renderPartners(); renderOpportunities();
-  if(document.querySelector('#panel-map').classList.contains('active')) initMap();
-}
-
-function renderOverview(){
-  const totalReg = DATA.precincts.reduce((s,p)=>s+(p.reg||0),0);
-  const totalVap = DATA.precincts.reduce((s,p)=>s+(p.vap||0),0);
+  const totalReg = precincts.reduce((s,p)=>s+(p.reg||0),0);
+  const totalVap = precincts.reduce((s,p)=>s+(p.vap||0),0);
   const rate = totalVap ? totalReg/totalVap : null;
-  const rates = DATA.precincts.map(p=>p.rate).filter(r=>r!=null);
-  const cards = [
-    ['Precincts', DATA.precincts.length], ['Registered Voters', totalReg.toLocaleString()],
-    ['Adult Population', totalVap.toLocaleString()], ['Citywide Reg. Rate', pct(rate)],
-    ['Polling Locations', DATA.polling.length], ['Volunteers', DATA.volunteers.length],
-    ['Events Logged', DATA.events.length], ['Partner Orgs', DATA.partners.length],
-  ];
-  document.getElementById('overview-cards').innerHTML = cards.map(c=>`<div class="card"><div class="num">${c[1]}</div><div class="label">${c[0]}</div></div>`).join('');
-  document.getElementById('rate-note').textContent = rates.length ? `Citywide: ${pct(rate)}. Precinct range: ${pct(Math.min(...rates))} to ${pct(Math.max(...rates))}.` : '';
-  const low = DATA.precincts.filter(p=>p.vap>=200 && p.rate!=null).sort((a,b)=>a.rate-b.rate).slice(0,10);
-  let html = '<table><thead><tr><th>Precinct</th><th>Ward</th><th>Council</th><th>Registered</th><th>Adult Pop.</th><th>Reg. Rate</th></tr></thead><tbody>';
-  low.forEach(p=>{ html += `<tr><td>${p.pw}</td><td>${p.ward}</td><td>${p.council}</td><td>${p.reg}</td><td>${p.vap}</td><td><span class="rate-pill" style="background:${rateColor(p.rate)}">${pct(p.rate)}</span></td></tr>`; });
-  document.getElementById('overview-priority').innerHTML = html + '</tbody></table>';
-}
+  const coveredPrecincts = new Set(events.map(e=>e.precinct_ward)).size;
+  const coveragePct = precincts.length ? (coveredPrecincts/precincts.length*100).toFixed(0)+'%' : '—';
 
-function renderPriority(){
-  const low = DATA.precincts.filter(p=>p.vap>=200 && p.rate!=null).sort((a,b)=>a.rate-b.rate);
-  document.querySelector('#priority-table tbody').innerHTML = low.map((p,i)=>`<tr>
-    <td>${i+1}</td><td>${p.pw}</td><td>${p.ward}</td><td>${p.council}</td><td>${p.planning}</td>
-    <td>${p.reg}</td><td>${p.vap}</td><td><span class="rate-pill" style="background:${rateColor(p.rate)}">${pct(p.rate)}</span></td>
-    <td>${p.polling||''}</td></tr>`).join('');
-}
+  document.getElementById('stat-cards').innerHTML = [
+    ['Registered Voters', totalReg.toLocaleString()],
+    ['Volunteers', volunteers.length],
+    ['Upcoming Events', events.length],
+    ['Precincts w/ an Event Logged', coveragePct],
+  ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${val}</div></div>`).join('');
 
-let precSort = {key:'pw', dir:1};
-function populateFilters(){
-  ['prec-ward','prec-council','prec-planning','map-council','map-planning'].forEach(id=>{
-    const sel = document.getElementById(id);
-    while(sel.options.length>1) sel.remove(1);
-  });
-  [...new Set(DATA.precincts.map(p=>p.ward))].sort((a,b)=>a-b).forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; document.getElementById('prec-ward').appendChild(o); });
-  [...new Set(DATA.precincts.map(p=>p.council))].sort().forEach(v=>{ ['prec-council','map-council'].forEach(id=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; document.getElementById(id).appendChild(o); }); });
-  [...new Set(DATA.precincts.map(p=>p.planning))].sort().forEach(v=>{ ['prec-planning','map-planning'].forEach(id=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; document.getElementById(id).appendChild(o); }); });
-}
-
-function renderPrecincts(){
-  const q = document.getElementById('prec-search').value.toLowerCase();
-  const ward = document.getElementById('prec-ward').value, council = document.getElementById('prec-council').value, planning = document.getElementById('prec-planning').value;
-  let rows = DATA.precincts.filter(p=>{
-    if(ward && String(p.ward)!==ward) return false;
-    if(council && p.council!==council) return false;
-    if(planning && p.planning!==planning) return false;
-    if(q && !((p.pw||'').toLowerCase().includes(q) || (p.neighborhood||'').toLowerCase().includes(q) || (p.polling||'').toLowerCase().includes(q))) return false;
-    return true;
-  });
-  rows.sort((a,b)=>{ let av=a[precSort.key], bv=b[precSort.key]; if(av==null) av = precSort.dir===1?Infinity:-Infinity; if(bv==null) bv = precSort.dir===1?Infinity:-Infinity; if(typeof av==='string') return av.localeCompare(bv)*precSort.dir; return (av-bv)*precSort.dir; });
-  document.getElementById('prec-count').textContent = rows.length + ' of ' + DATA.precincts.length + ' precincts';
-  document.querySelector('#prec-table tbody').innerHTML = rows.map(p=>`<tr>
-    <td>${p.pw}</td><td>${p.ward}</td><td>${p.council}</td><td>${p.planning}</td><td>${p.neighborhood||''}</td>
-    <td>${p.reg}</td><td>${p.vap||'—'}</td><td><span class="rate-pill" style="background:${rateColor(p.rate)}">${pct(p.rate)}</span></td>
-    <td>${p.polling||''}</td></tr>`).join('');
-}
-['prec-search','prec-ward','prec-council','prec-planning'].forEach(id=> document.getElementById(id).addEventListener('input', renderPrecincts));
-document.querySelectorAll('#prec-table th').forEach(th=> th.addEventListener('click',()=>{ const key=th.dataset.key; precSort.dir = (precSort.key===key)?-precSort.dir:1; precSort.key=key; renderPrecincts(); }));
-
-function renderVolunteers(){
-  document.getElementById('vol-count').textContent = DATA.volunteers.length + ' volunteers';
-  document.querySelector('#vol-table tbody').innerHTML = DATA.volunteers.map(v=>`<tr>
-    <td>${v.name||''}</td><td>${v.phone||''}</td><td>${v.email||''}</td><td>${v.home_precinct||''}</td>
-    <td>${v.skills||''}</td><td>${v.transportation||''}</td><td>${v.availability||''}</td></tr>`).join('');
-}
-function renderPolling(){
-  const q = (document.getElementById('poll-search').value||'').toLowerCase();
-  let rows = DATA.polling.filter(p=> !q || (p.location_name||'').toLowerCase().includes(q) || (p.address||'').toLowerCase().includes(q));
-  document.getElementById('poll-count').textContent = rows.length + ' of ' + DATA.polling.length + ' locations';
-  document.querySelector('#poll-table tbody').innerHTML = rows.map(p=>`<tr><td>${p.location_name||''}</td><td>${p.address||''}</td><td>${p.precincts_served_count||''}</td></tr>`).join('');
-}
-document.getElementById('poll-search').addEventListener('input', renderPolling);
-
-function renderEvents(){
-  document.getElementById('events-count').textContent = DATA.events.length + ' events logged';
-  document.querySelector('#events-table tbody').innerHTML = DATA.events.map(e=>`<tr>
-    <td>${e.event_date||''}</td><td>${e.event_name||''}</td><td>${e.location||''}</td><td>${e.precinct_ward||''}</td>
-    <td>${e.event_type||''}</td><td>${e.volunteers_present||''}</td><td>${e.new_registrations||''}</td><td>${e.notes||''}</td></tr>`).join('');
-}
-function renderPartners(){
-  document.getElementById('partners-count').textContent = DATA.partners.length + ' partner organizations';
-  document.querySelector('#partners-table tbody').innerHTML = DATA.partners.map(p=>{
-    const c = {'Active Partner':'#3F7A5C','Meeting Scheduled':'#C9A24B','Contacted':'#D68A2C','Not Contacted':'#999'}[p.status] || '#999';
-    return `<tr><td>${p.org_name||''}</td><td>${p.contact_name||''} ${p.contact_info||''}</td><td>${p.org_type||''}</td><td>${p.area_served||''}</td><td><span class="status-pill" style="background:${c}">${p.status||''}</span></td><td>${p.notes||''}</td></tr>`;
+  const low = precincts.filter(p=>p.vap>=200 && p.rate!=null).sort((a,b)=>a.rate-b.rate).slice(0,4);
+  document.getElementById('priority-mini').innerHTML = low.map(p=>{
+    const level = p.rate<0.6?['High','chip-red']:p.rate<0.75?['Medium','chip-gold']:['Watch','chip-blue'];
+    return `<div style="display:flex;align-items:center;gap:10px">
+      <div class="td" style="flex:1">${p.pw}</div>
+      <span class="chip ${level[1]}">${level[0]}</span>
+    </div>`;
   }).join('');
-}
-function renderOpportunities(){
-  document.getElementById('opps-count').textContent = DATA.opportunities.length + ' opportunities tracked';
-  document.querySelector('#opps-table tbody').innerHTML = DATA.opportunities.map(o=>{
-    const c = {'Confirmed':'#3F7A5C','Attended':'#1F4E5F','Contacted':'#D68A2C','Identified':'#999','Passed':'#B23A2E'}[o.status] || '#999';
-    return `<tr><td>${o.opportunity_name||''}</td><td>${o.event_date||''}</td><td>${o.location||''}</td><td>${o.foot_traffic||''}</td><td>${o.contact||''}</td><td><span class="status-pill" style="background:${c}">${o.status||''}</span></td><td>${o.notes||''}</td></tr>`;
+
+  const statuses = ['New','Contacted','Active','Inactive'];
+  const statusColors = {New:'chip-blue', Contacted:'chip-gold', Active:'chip-green', Inactive:'chip-red'};
+  document.getElementById('status-cols').innerHTML = statuses.map(s=>{
+    const inStatus = volunteers.filter(v=>(v.status||'New')===s);
+    return `<div style="flex:1;min-width:120px;background:#faf8f3;border-radius:4px;padding:8px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font:700 11px 'Nunito',sans-serif;color:#0b1f3a">${s}</span>
+        <span class="chip chip-neutral" style="font-size:9.5px">${inStatus.length}</span>
+      </div>
+      ${inStatus.slice(0,4).map(v=>`<div style="background:#fff;border:1px solid #eee;border-radius:3px;padding:6px 8px;font:600 11px 'Nunito',sans-serif">${v.name}</div>`).join('')}
+    </div>`;
   }).join('');
+
+  document.getElementById('vol-rows').innerHTML = volunteers.slice(0,8).map(v=>`
+    <tr class="td">
+      <td>${v.name||''}</td>
+      <td class="td-muted">${v.home_precinct||''}</td>
+      <td><span class="chip ${statusColors[v.status]||'chip-neutral'}">${v.status||'New'}</span></td>
+      <td class="td-muted">${v.skills||''}</td>
+      <td class="td-muted">${v.availability||''}</td>
+    </tr>`).join('');
+
+  initMiniMap(precincts);
 }
 
-let _precinctBoundaries = null;
-async function loadBoundaries(){
-  if(_precinctBoundaries) return _precinctBoundaries;
+async function initMiniMap(precincts){
+  const map = L.map('mini-map', {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false}).setView([29.9639, -90.0407], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18}).addTo(map);
+  const byPw = {}; precincts.forEach(p=> byPw[p.pw]=p);
   const res = await fetch('precinct_boundaries.geojson');
-  _precinctBoundaries = await res.json();
-  return _precinctBoundaries;
-}
-
-function precinctPopupHtml(p){
-  const events = DATA.events.filter(e=>e.precinct_ward===p.pw);
-  const vols = DATA.volunteers.filter(v=>v.home_precinct===p.pw);
-  let html = `<strong>${p.pw}</strong><br>Ward ${p.ward} &middot; Council ${p.council} &middot; ${p.planning}<br>${p.neighborhood||''}<br>
-    Registered: ${p.reg} / Adult Pop: ${p.vap||'—'}<br>Reg. Rate: <strong>${pct(p.rate)}</strong><br>Polling: ${p.polling||''}`;
-  if(vols.length) html += `<br><br><strong>Volunteers here (${vols.length}):</strong><br>` + vols.map(v=>v.name).join(', ');
-  if(events.length) html += `<br><br><strong>Events logged (${events.length}):</strong><br>` + events.slice(0,5).map(e=>`${e.event_date||''} — ${e.event_name}`).join('<br>');
-  return html;
-}
-
-async function initMap(){
-  if(window._leafletMap){ window._leafletMap.remove(); }
-  const map = L.map('map').setView([29.9639, -90.0407], 12);
-  window._leafletMap = map;
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'&copy; OpenStreetMap contributors', maxZoom:18}).addTo(map);
-
-  const byPw = {};
-  DATA.precincts.forEach(p=> byPw[p.pw] = p);
-
-  const boundaries = await loadBoundaries();
-  const layers = [];
-
-  const geoLayer = L.geoJSON(boundaries, {
-    style: feature=>{
-      const p = byPw[feature.properties.precinct_ward];
-      return { color:'#0b1f3a', weight:1, fillColor: p ? rateColor(p.rate) : '#999', fillOpacity:0.65 };
-    },
-    onEachFeature: (feature, layer)=>{
-      const p = byPw[feature.properties.precinct_ward];
-      if(!p) return;
-      layer.bindPopup(precinctPopupHtml(p));
-      layer._council = p.council; layer._planning = p.planning;
-      layer.on('mouseover', ()=> layer.setStyle({weight:3, fillOpacity:0.85}));
-      layer.on('mouseout', ()=> layer.setStyle({weight:1, fillOpacity:0.65}));
-      layers.push(layer);
-    }
+  const gj = await res.json();
+  const layer = L.geoJSON(gj, {
+    style: f=>{ const p = byPw[f.properties.precinct_ward]; return {color:'#0b1f3a', weight:0.5, fillColor:p?rateColor(p.rate):'#999', fillOpacity:0.7}; }
   }).addTo(map);
-
-  map.fitBounds(geoLayer.getBounds());
-
-  function filterMap(){
-    const council = document.getElementById('map-council').value, planning = document.getElementById('map-planning').value;
-    layers.forEach(l=>{
-      const show = (!council||l._council===council) && (!planning||l._planning===planning);
-      l.setStyle({opacity: show?1:0.05, fillOpacity: show?0.65:0.03});
-    });
-  }
-  document.getElementById('map-council').onchange = filterMap;
-  document.getElementById('map-planning').onchange = filterMap;
+  map.fitBounds(layer.getBounds());
 }
 
-loadAll();
+load();
 </script>
 </body>
 </html>

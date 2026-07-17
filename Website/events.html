@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Events — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="index.html">Overview</a>
+    <a href="map.html">Map</a>
+    <a href="precincts.html">Precincts</a>
+    <a href="priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="polling-locations.html">Polling Locations</a>
+    <a href="events.html" class="active">Events</a>
+    <a href="partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+    <a href="voter-tracking.html">Voter Tracking</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="page-title" style="margin:0">Outreach Events</div>
+    <a href="event-form.html"><button class="primary">+ Log Event</button></a>
+  </div>
+  <div class="th" id="count" style="margin-bottom:8px"></div>
+  <div class="card" style="overflow-x:auto">
+    <table class="data-table" style="min-width:900px">
+      <thead><tr class="th">
+        <th style="padding:10px 12px">Date</th><th>Event</th><th>Location</th><th>Precinct/Ward</th>
+        <th>Type</th><th>Volunteers</th><th>New Reg.</th><th>Already Reg.</th><th>Inactive</th><th>Notes</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+</div>
+<script>
+async function load(){
+  const { data } = await sb.from('outreach_events').select('*').order('event_date',{ascending:false});
+  const events = data||[];
+  document.getElementById('count').textContent = events.length + ' events logged';
+  document.getElementById('rows').innerHTML = events.map(e=>{
+    const href = e.event_uid ? `event-detail.html?event=${encodeURIComponent(e.event_uid)}` : null;
+    const rowAttrs = href ? `style="cursor:pointer" onclick="location.href='${href}'"` : '';
+    return `<tr class="td" ${rowAttrs}>
+    <td style="padding:9px 12px">${e.event_date||''}</td><td>${e.event_name||''}</td><td class="td-muted">${e.location||''}</td>
+    <td class="td-muted">${e.precinct_ward||''}</td><td>${e.event_type||''}</td><td>${e.volunteers_present||''}</td>
+    <td>${e.new_registrations||''}</td><td>${e.found_already_registered||''}</td><td>${e.found_inactive||''}</td>
+    <td class="td-muted">${e.notes||''}</td></tr>`;
+  }).join('');
+}
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partner Detail — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="partners.html">&larr; Back to Partners</a></nav>
+</header>
+<main class="site">
+  <div id="not-found" class="card card-pad" style="display:none;background:#f2e3e2;border-color:#e3c9c8">
+    <span class="td" style="color:#8f3b39">Partner not found. Check <a href="partners.html">Partners</a>.</span>
+  </div>
+  <div id="content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:4px">
+      <div class="page-title" style="margin:0" id="p-name"></div>
+      <span class="chip" id="p-status"></span>
+    </div>
+    <div class="td-muted" id="p-sub" style="margin-bottom:18px"></div>
+
+    <div class="card card-pad" style="margin-bottom:18px">
+      <div class="card-title">Organization Info</div>
+      <div style="display:flex;flex-direction:column;gap:8px" id="info-rows"></div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="card-title">Precincts/Wards Served</div>
+      <div id="precincts-empty" class="td-muted" style="font-size:13px;display:none">No precincts/wards recorded for this org yet.</div>
+      <div id="precincts-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+const statusColors = {'Active Partner':'#3f6b48','Meeting Scheduled':'#7d652a','Contacted':'#b8963f','Not Contacted':'#999'};
+const params = new URLSearchParams(location.search);
+const partnerUid = params.get('p');
+
+async function load(){
+  if(!partnerUid){ document.getElementById('not-found').style.display='block'; return; }
+
+  const [pRes, linkRes] = await Promise.all([
+    sb.from('community_partners').select('*').eq('partner_uid', partnerUid),
+    sb.from('partner_precincts').select('*').eq('partner_uid', partnerUid),
+  ]);
+  const p = (pRes.data||[])[0];
+  if(!p){ document.getElementById('not-found').style.display='block'; return; }
+
+  document.getElementById('content').style.display='block';
+  document.getElementById('p-name').textContent = p.org_name || '(unnamed)';
+  const c = statusColors[p.status]||'#999';
+  const statusEl = document.getElementById('p-status');
+  statusEl.textContent = p.status || '';
+  statusEl.style.background = c+'22'; statusEl.style.color = c;
+  document.getElementById('p-sub').textContent = [p.org_type, p.contact_name, p.contact_info].filter(Boolean).join(' · ');
+
+  document.getElementById('info-rows').innerHTML = [
+    ['Area Served (description)', p.area_served], ['Notes', p.notes],
+  ].map(([label,val])=>`<div style="display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid #f0ece2;padding-bottom:7px">
+    <span class="th">${label}</span><span class="td" style="text-align:right">${val||'—'}</span></div>`).join('');
+
+  const links = linkRes.data||[];
+  document.getElementById('precincts-empty').style.display = links.length ? 'none' : 'block';
+  document.getElementById('precincts-list').innerHTML = links.map(l=>
+    `<a class="chip chip-blue" href="precincts.html?pw=${encodeURIComponent(l.precinct_ward)}">${l.precinct_ward}</a>`
+  ).join('');
+}
+
+load();
+</script>
+</body>
+</html>
