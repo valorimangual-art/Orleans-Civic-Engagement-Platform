@@ -43,19 +43,40 @@
 </div>
 <script>
 const statusColors = {New:'#2560b0', Contacted:'#7d652a', Active:'#3f6b48', Inactive:'#8f3b39'};
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
 async function load(){
-  const { data } = await sb.from('volunteers').select('*').order('created_at',{ascending:false});
+  const { data, error } = await sb.from('volunteers')
+    .select('id,name,phone,email,home_precinct,status,skills,transportation,availability,created_at')
+    .order('created_at',{ascending:false});
+  if(error){
+    console.error('Unable to load volunteers:', error);
+    document.getElementById('count').textContent = 'Unable to load volunteers.';
+    return;
+  }
   const vols = data||[];
   document.getElementById('count').textContent = vols.length + ' volunteers';
   document.getElementById('rows').innerHTML = vols.map(v=>{
     const c = statusColors[v.status]||'#666';
-    const href = v.volunteer_uid ? `volunteer-detail.html?v=${encodeURIComponent(v.volunteer_uid)}` : null;
-    const rowAttrs = href ? `style="cursor:pointer" onclick="location.href='${href}'"` : '';
+    const hasId = /^[1-9]\d*$/.test(String(v.id??''));
+    const href = hasId ? `volunteer-detail.html?v=${encodeURIComponent(v.id)}` : null;
+    const rowAttrs = href ? `style="cursor:pointer" data-href="${href}"` : '';
+    const name = escapeHtml(v.name||'');
+    const nameCell = href ? `<a href="${href}">${name}</a>` : name;
     return `<tr class="td" ${rowAttrs}>
-      <td style="padding:9px 12px">${v.name||''}</td><td>${v.phone||''}</td><td>${v.email||''}</td><td class="td-muted">${v.home_precinct||''}</td>
-      <td><span class="chip" style="background:${c}22;color:${c}">${v.status||'New'}</span></td>
-      <td class="td-muted">${v.skills||''}</td><td class="td-muted">${v.transportation||''}</td><td class="td-muted">${v.availability||''}</td></tr>`;
+      <td style="padding:9px 12px">${nameCell}</td><td>${escapeHtml(v.phone)}</td><td>${escapeHtml(v.email)}</td><td class="td-muted">${escapeHtml(v.home_precinct)}</td>
+      <td><span class="chip" style="background:${c}22;color:${c}">${escapeHtml(v.status||'New')}</span></td>
+      <td class="td-muted">${escapeHtml(v.skills)}</td><td class="td-muted">${escapeHtml(v.transportation)}</td><td class="td-muted">${escapeHtml(v.availability)}</td></tr>`;
   }).join('');
+  document.querySelectorAll('#rows tr[data-href]').forEach(row=>{
+    row.addEventListener('click', event=>{
+      if(event.target.closest('a')) return;
+      location.href = row.dataset.href;
+    });
+  });
 }
 load();
 </script>

@@ -42,17 +42,40 @@
 </div>
 <script>
 const statusColors = {Confirmed:'#3f6b48', Attended:'#0b1f3a', Contacted:'#b8963f', Identified:'#999', Passed:'#8f3b39'};
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
 async function load(){
-  const { data } = await sb.from('outreach_opportunities').select('*').order('created_at',{ascending:false});
+  const { data, error } = await sb.from('outreach_opportunities')
+    .select('id,opportunity_name,event_date,location,foot_traffic,contact,status,notes,created_at')
+    .order('created_at',{ascending:false});
+  if(error){
+    console.error('Unable to load opportunities:', error);
+    document.getElementById('count').textContent = 'Unable to load opportunities.';
+    return;
+  }
   const opps = data||[];
   document.getElementById('count').textContent = opps.length + ' opportunities tracked';
   document.getElementById('rows').innerHTML = opps.map(o=>{
     const c = statusColors[o.status]||'#999';
-    return `<tr class="td">
-      <td style="padding:9px 12px">${o.opportunity_name||''}</td><td class="td-muted">${o.event_date||''}</td><td class="td-muted">${o.location||''}</td>
-      <td>${o.foot_traffic||''}</td><td class="td-muted">${o.contact||''}</td>
-      <td><span class="chip" style="background:${c}22;color:${c}">${o.status||''}</span></td><td class="td-muted">${o.notes||''}</td></tr>`;
+    const hasId = /^[1-9]\d*$/.test(String(o.id??''));
+    const href = hasId ? `opportunity-detail.html?o=${encodeURIComponent(o.id)}` : null;
+    const rowAttrs = href ? `style="cursor:pointer" data-href="${href}"` : '';
+    const opportunityName = escapeHtml(o.opportunity_name||'');
+    const nameCell = href ? `<a href="${href}">${opportunityName}</a>` : opportunityName;
+    return `<tr class="td" ${rowAttrs}>
+      <td style="padding:9px 12px">${nameCell}</td><td class="td-muted">${escapeHtml(o.event_date)}</td><td class="td-muted">${escapeHtml(o.location)}</td>
+      <td>${escapeHtml(o.foot_traffic)}</td><td class="td-muted">${escapeHtml(o.contact)}</td>
+      <td><span class="chip" style="background:${c}22;color:${c}">${escapeHtml(o.status)}</span></td><td class="td-muted">${escapeHtml(o.notes)}</td></tr>`;
   }).join('');
+  document.querySelectorAll('#rows tr[data-href]').forEach(row=>{
+    row.addEventListener('click', event=>{
+      if(event.target.closest('a')) return;
+      location.href = row.dataset.href;
+    });
+  });
 }
 load();
 </script>

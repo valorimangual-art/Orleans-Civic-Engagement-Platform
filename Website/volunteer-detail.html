@@ -14,9 +14,8 @@
   <nav class="site"><a href="volunteers.html">&larr; Back to Volunteers</a></nav>
 </header>
 <main class="site">
-  <div id="not-found" class="card card-pad" style="display:none;background:#f2e3e2;border-color:#e3c9c8">
-    <span class="td" style="color:#8f3b39">Volunteer not found. Check <a href="volunteers.html">Volunteers</a>.</span>
-  </div>
+  <div id="loading" class="card card-pad"><span class="td-muted">Loading volunteer…</span></div>
+  <div id="state-message" class="card card-pad" style="display:none"></div>
   <div id="content" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:4px">
       <div class="page-title" style="margin:0" id="v-name"></div>
@@ -36,7 +35,7 @@
       <div id="shifts-empty" class="td-muted" style="font-size:13px;display:none">No shifts logged for this volunteer yet.</div>
       <div style="overflow-x:auto">
       <table class="data-table" style="min-width:640px" id="shifts-table">
-        <thead><tr class="th"><th style="padding:10px 12px">Date</th><th>Event</th><th>Precinct/Ward</th><th>Role</th><th>Hours</th><th>Score</th></tr></thead>
+        <thead><tr class="th"><th style="padding:10px 12px">Date</th><th>Event</th><th>Precinct/Ward</th><th>Role</th><th>Hours</th></tr></thead>
         <tbody id="shifts-rows"></tbody>
       </table>
       </div>
@@ -47,15 +46,36 @@
 <script>
 const statusColors = {New:'#2560b0', Contacted:'#7d652a', Active:'#3f6b48', Inactive:'#8f3b39'};
 const params = new URLSearchParams(location.search);
-const volunteerUid = params.get('v');
+const volunteerParam = params.get('v');
+const volunteerId = /^[1-9]\d*$/.test(volunteerParam||'') ? volunteerParam : null;
+
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
+
+function showState(kind, message){
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'none';
+  const el = document.getElementById('state-message');
+  el.style.display = 'block';
+  el.style.background = kind==='error' ? '#f2e3e2' : '#fff';
+  el.style.borderColor = kind==='error' ? '#e3c9c8' : '#dedad0';
+  el.innerHTML = `<span class="td"${kind==='error'?' style="color:#8f3b39"':''}>${escapeHtml(message)}</span> <a href="volunteers.html">Back to Volunteers</a>`;
+}
 
 async function load(){
-  if(!volunteerUid){ document.getElementById('not-found').style.display='block'; return; }
+  if(!volunteerId){ showState('error','Invalid volunteer identifier.'); return; }
 
-  const { data } = await sb.from('volunteers').select('*').eq('volunteer_uid', volunteerUid);
-  const v = (data||[])[0];
-  if(!v){ document.getElementById('not-found').style.display='block'; return; }
+  const { data: v, error } = await sb.from('volunteers')
+    .select('id,name,phone,email,home_precinct,skills,languages,transportation,availability,status')
+    .eq('id', volunteerId)
+    .maybeSingle();
+  if(error){ console.error('Unable to load volunteer:', error); showState('error','Unable to load this volunteer.'); return; }
+  if(!v){ showState('not-found','Volunteer not found.'); return; }
 
+  document.getElementById('loading').style.display='none';
   document.getElementById('content').style.display='block';
   document.getElementById('v-name').textContent = v.name || '(unnamed)';
   const c = statusColors[v.status]||'#666';
@@ -67,33 +87,41 @@ async function load(){
   document.getElementById('info-rows').innerHTML = [
     ['Skills', v.skills], ['Languages', v.languages], ['Transportation', v.transportation], ['Availability', v.availability],
   ].map(([label,val])=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #f0ece2;padding-bottom:7px">
-    <span class="th">${label}</span><span class="td">${val||'—'}</span></div>`).join('');
+    <span class="th">${label}</span><span class="td">${escapeHtml(val||'—')}</span></div>`).join('');
 
   await loadShifts();
 }
 
 async function loadShifts(){
-  const { data } = await sb.from('event_volunteers').select('*, outreach_events(event_name,event_date,precinct_ward,event_uid)').eq('volunteer_uid', volunteerUid).order('created_at',{ascending:false});
+  const { data, error } = await sb.from('volunteer_event_hours')
+    .select('id,volunteer_id,event_id,hours,role,created_at,outreach_events(id,event_name,event_date,precinct_ward)')
+    .eq('volunteer_id', volunteerId)
+    .order('created_at',{ascending:false});
+  if(error){
+    console.error('Unable to load volunteer shift history:', error);
+    document.getElementById('shifts-empty').textContent = 'Unable to load shift history.';
+    document.getElementById('shifts-empty').style.display = 'block';
+    document.getElementById('shifts-table').style.display = 'none';
+    return;
+  }
   const rows = data||[];
 
   const totalHours = rows.reduce((s,r)=>s+(parseFloat(r.hours)||0),0);
-  const scored = rows.filter(r=>r.score!=null);
-  const avgScore = scored.length ? (scored.reduce((s,r)=>s+r.score,0)/scored.length).toFixed(1) : '—';
 
   document.getElementById('stat-cards').innerHTML = [
     ['Total Shifts', rows.length],
     ['Total Hours', totalHours],
-    ['Average Score', avgScore],
   ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${val}</div></div>`).join('');
 
   document.getElementById('shifts-empty').style.display = rows.length ? 'none' : 'block';
   document.getElementById('shifts-table').style.display = rows.length ? '' : 'none';
   document.getElementById('shifts-rows').innerHTML = rows.map(r=>{
     const ev = r.outreach_events || {};
-    const eventLink = ev.event_uid ? `<a href="event-detail.html?event=${encodeURIComponent(ev.event_uid)}">${ev.event_name||'(untitled event)'}</a>` : (ev.event_name||'(untitled event)');
+    const eventName = escapeHtml(ev.event_name||'(untitled event)');
+    const eventLink = ev.id ? `<a href="event-detail.html?event=${encodeURIComponent(ev.id)}">${eventName}</a>` : eventName;
     return `<tr class="td">
-      <td style="padding:9px 12px">${ev.event_date||''}</td><td>${eventLink}</td><td class="td-muted">${ev.precinct_ward||''}</td>
-      <td class="td-muted">${r.role||''}</td><td>${r.hours!=null ? r.hours : ''}</td><td>${r.score!=null ? r.score : ''}</td></tr>`;
+      <td style="padding:9px 12px">${escapeHtml(ev.event_date)}</td><td>${eventLink}</td><td class="td-muted">${escapeHtml(ev.precinct_ward)}</td>
+      <td class="td-muted">${escapeHtml(r.role)}</td><td>${escapeHtml(r.hours)}</td></tr>`;
   }).join('');
 }
 

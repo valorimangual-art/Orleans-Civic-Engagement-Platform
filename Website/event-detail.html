@@ -14,9 +14,8 @@
   <nav class="site"><a href="events.html">&larr; Back to Events</a></nav>
 </header>
 <main class="site">
-  <div id="not-found" class="card card-pad" style="display:none;background:#f2e3e2;border-color:#e3c9c8">
-    <span class="td" style="color:#8f3b39">Event not found. It may have been logged before this page existed &mdash; check <a href="events.html">Events</a>.</span>
-  </div>
+  <div id="loading" class="card card-pad"><span class="td-muted">Loading event…</span></div>
+  <div id="state-message" class="card card-pad" style="display:none"></div>
   <div id="content" style="display:none">
     <div class="page-title" id="event-title" style="margin-bottom:4px"></div>
     <div class="td-muted" id="event-sub" style="margin-bottom:18px"></div>
@@ -33,7 +32,7 @@
       <div id="roster-empty" class="td-muted" style="font-size:13px;display:none">No volunteers logged for this event yet.</div>
       <div style="overflow-x:auto">
       <table class="data-table" style="min-width:640px" id="roster-table">
-        <thead><tr class="th"><th style="padding:10px 12px">Name</th><th>Role</th><th>Hours</th><th>Score</th><th>Contact</th></tr></thead>
+        <thead><tr class="th"><th style="padding:10px 12px">Name</th><th>Role</th><th>Hours</th><th>Contact</th></tr></thead>
         <tbody id="roster-rows"></tbody>
       </table>
       </div>
@@ -44,7 +43,7 @@
       <div class="form-wrap" style="max-width:520px">
         <form id="rform">
           <div class="field"><label>Volunteer *</label>
-            <select id="volunteer_uid" required><option value="">Select a volunteer</option></select>
+            <select id="volunteer_id" required><option value="">Select a volunteer</option></select>
           </div>
           <div class="field"><label>Role</label>
             <select id="role"><option value="">Select one</option>
@@ -53,9 +52,6 @@
             </select>
           </div>
           <div class="field"><label>Hours</label><input type="number" step="0.25" id="hours"></div>
-          <div class="field"><label>Score (optional, 1&ndash;5)</label><input type="number" min="1" max="5" id="score">
-            <div class="hint">Optional &mdash; leave blank if you're not scoring shifts.</div></div>
-          <div class="field"><label>Notes</label><textarea id="rnotes"></textarea></div>
           <button type="submit" class="primary">+ Add to Roster</button>
           <div id="rerr" style="color:#8f3b39;margin-top:12px;"></div>
         </form>
@@ -66,74 +62,103 @@
 </div>
 <script>
 const params = new URLSearchParams(location.search);
-const eventUid = params.get('event');
-let volunteersById = {};
+const eventParam = params.get('event');
+const eventId = /^[1-9]\d*$/.test(eventParam||'') ? eventParam : null;
+
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
+
+function showState(kind, message){
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'none';
+  const el = document.getElementById('state-message');
+  el.style.display = 'block';
+  el.style.background = kind==='error' ? '#f2e3e2' : '#fff';
+  el.style.borderColor = kind==='error' ? '#e3c9c8' : '#dedad0';
+  el.innerHTML = `<span class="td"${kind==='error'?' style="color:#8f3b39"':''}>${escapeHtml(message)}</span> <a href="events.html">Back to Events</a>`;
+}
 
 async function load(){
-  if(!eventUid){ document.getElementById('not-found').style.display='block'; return; }
+  if(!eventId){ showState('error','Invalid event identifier.'); return; }
 
   const [evRes, volRes] = await Promise.all([
-    sb.from('outreach_events').select('*').eq('event_uid', eventUid),
-    sb.from('volunteers').select('*').order('name'),
+    sb.from('outreach_events')
+      .select('id,event_name,event_date,location,precinct_ward,event_type,volunteers_present,new_registrations,notes,created_at,doors_knocked,flyers_distributed,signatures_collected,confirmed,voters_found_inactive,unsure_registration_status')
+      .eq('id', eventId)
+      .maybeSingle(),
+    sb.from('volunteers').select('id,name,phone,email').order('name'),
   ]);
-  const event = (evRes.data||[])[0];
-  if(!event){ document.getElementById('not-found').style.display='block'; return; }
+  if(evRes.error){ console.error('Unable to load event:', evRes.error); showState('error','Unable to load this event.'); return; }
+  if(volRes.error){ console.error('Unable to load volunteers for roster:', volRes.error); showState('error','Unable to load the event roster form.'); return; }
+  const event = evRes.data;
+  if(!event){ showState('not-found','Event not found.'); return; }
 
-  (volRes.data||[]).forEach(v=>{ if(v.volunteer_uid) volunteersById[v.volunteer_uid]=v; });
   populateVolunteerSelect(volRes.data||[]);
 
+  document.getElementById('loading').style.display='none';
   document.getElementById('content').style.display='block';
   document.getElementById('event-title').textContent = event.event_name || '(untitled event)';
   document.getElementById('event-sub').textContent = [event.event_date, event.location, event.precinct_ward, event.event_type].filter(Boolean).join(' · ');
   document.getElementById('event-notes').textContent = event.notes || '—';
   document.getElementById('notes-card').style.display = event.notes ? 'block' : 'none';
 
-  const notReg = (event.could_not_register_no_id||0)+(event.could_not_register_felony||0)+(event.could_not_register_other||0);
   document.getElementById('stat-cards').innerHTML = [
     ['New Registrations', event.new_registrations||0],
-    ['Found Already Registered', event.found_already_registered||0],
-    ['Found Inactive', event.found_inactive||0],
-    ['Could Not Register', notReg],
-  ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${val}</div></div>`).join('')
-  + (notReg ? `<div class="td-muted" style="grid-column:1/-1;font-size:12px">Could not register breakdown &mdash; No ID: ${event.could_not_register_no_id||0}, Felony: ${event.could_not_register_felony||0}, Other: ${event.could_not_register_other||0}</div>` : '');
+    ['Voters Found Inactive', event.voters_found_inactive||0],
+    ['Unsure Registration Status', event.unsure_registration_status||0],
+    ['Doors Knocked', event.doors_knocked||0],
+    ['Flyers Distributed', event.flyers_distributed||0],
+    ['Signatures Collected', event.signatures_collected||0],
+  ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${escapeHtml(val)}</div></div>`).join('');
 
   await loadRoster();
 }
 
 async function loadRoster(){
-  const { data } = await sb.from('event_volunteers').select('*, volunteers(name,phone,email,volunteer_uid)').eq('event_uid', eventUid).order('created_at');
+  const { data, error } = await sb.from('volunteer_event_hours')
+    .select('id,event_id,volunteer_id,hours,role,created_at,volunteers(id,name,phone,email)')
+    .eq('event_id', eventId)
+    .order('created_at');
+  if(error){
+    console.error('Unable to load event roster:', error);
+    document.getElementById('roster-empty').textContent = 'Unable to load the volunteer roster.';
+    document.getElementById('roster-empty').style.display = 'block';
+    document.getElementById('roster-table').style.display = 'none';
+    return;
+  }
   const rows = data||[];
   document.getElementById('roster-empty').style.display = rows.length ? 'none' : 'block';
   document.getElementById('roster-table').style.display = rows.length ? '' : 'none';
   document.getElementById('roster-rows').innerHTML = rows.map(r=>{
     const v = r.volunteers || {};
-    const name = v.volunteer_uid ? `<a href="volunteer-detail.html?v=${encodeURIComponent(v.volunteer_uid)}">${v.name||'(unknown)'}</a>` : (v.name||'(unknown)');
+    const volunteerName = escapeHtml(v.name||'(unknown)');
+    const name = v.id ? `<a href="volunteer-detail.html?v=${encodeURIComponent(v.id)}">${volunteerName}</a>` : volunteerName;
     return `<tr class="td">
-      <td style="padding:9px 12px">${name}</td><td class="td-muted">${r.role||''}</td>
-      <td>${r.hours!=null ? r.hours : ''}</td><td>${r.score!=null ? r.score : ''}</td>
-      <td class="td-muted">${[v.phone,v.email].filter(Boolean).join(' / ')}</td></tr>`;
+      <td style="padding:9px 12px">${name}</td><td class="td-muted">${escapeHtml(r.role)}</td>
+      <td>${escapeHtml(r.hours)}</td><td class="td-muted">${escapeHtml([v.phone,v.email].filter(Boolean).join(' / '))}</td></tr>`;
   }).join('');
 }
 
 function populateVolunteerSelect(vols){
-  const sel = document.getElementById('volunteer_uid');
-  vols.filter(v=>v.volunteer_uid).forEach(v=>{
-    const o = document.createElement('option'); o.value = v.volunteer_uid; o.textContent = v.name; sel.appendChild(o);
+  const sel = document.getElementById('volunteer_id');
+  vols.filter(v=>v.id).forEach(v=>{
+    const o = document.createElement('option'); o.value = v.id; o.textContent = v.name; sel.appendChild(o);
   });
 }
 
 document.getElementById('rform').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const row = {
-    event_uid: eventUid,
-    volunteer_uid: document.getElementById('volunteer_uid').value,
+    event_id: eventId,
+    volunteer_id: document.getElementById('volunteer_id').value,
     role: document.getElementById('role').value,
     hours: document.getElementById('hours').value ? parseFloat(document.getElementById('hours').value) : null,
-    score: document.getElementById('score').value ? parseInt(document.getElementById('score').value) : null,
-    notes: document.getElementById('rnotes').value,
   };
-  const { error } = await sb.from('event_volunteers').insert([row]);
-  if(error){ document.getElementById('rerr').textContent = 'Something went wrong: ' + error.message; return; }
+  const { error } = await sb.from('volunteer_event_hours').insert([row]);
+  if(error){ console.error('Unable to add roster entry:', error); document.getElementById('rerr').textContent = 'Unable to add this volunteer to the roster.'; return; }
   document.getElementById('rerr').textContent = '';
   document.getElementById('rform').reset();
   await loadRoster();

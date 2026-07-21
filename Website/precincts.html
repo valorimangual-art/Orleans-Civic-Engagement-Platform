@@ -65,12 +65,19 @@
 <script>
 function pct(r){ return (r==null||isNaN(r)) ? '—' : (r*100).toFixed(1)+'%'; }
 function rateColor(r){ if(r==null) return '#999'; if(r<0.60) return '#a94442'; if(r<0.85) return '#b8963f'; return '#5f8f6d'; }
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
 
 let DATA = [];
 let sortState = {key:'pw', dir:1};
 
 async function load(){
-  const { data } = await sb.from('precincts').select('*');
+  const { data, error } = await sb.from('precincts')
+    .select('precinct_ward,ward,council_district,planning_district,neighborhood,registered_voters,adult_population,registration_rate,polling_location');
+  if(error){ console.error('Unable to load precincts:', error); document.getElementById('count').textContent='Unable to load precincts.'; return; }
   DATA = (data||[]).map(p=>({
     pw:p.precinct_ward, ward:p.ward, council:p.council_district, planning:p.planning_district,
     neighborhood:p.neighborhood, reg:p.registered_voters, vap:p.adult_population, rate:p.registration_rate,
@@ -86,22 +93,28 @@ async function maybeRenderActivity(){
   const pw = new URLSearchParams(location.search).get('pw');
   if(!pw || !DATA.find(p=>p.pw===pw)) return;
 
-  const { data: events } = await sb.from('outreach_events').select('*').eq('precinct_ward', pw).order('event_date',{ascending:false});
+  const { data: events, error: eventsError } = await sb.from('outreach_events')
+    .select('id,event_name,event_date,event_type,precinct_ward')
+    .eq('precinct_ward', pw)
+    .order('event_date',{ascending:false});
+  if(eventsError){ console.error('Unable to load precinct activity:', eventsError); return; }
   const evs = events||[];
   let rosterCounts = {};
-  const uids = evs.map(e=>e.event_uid).filter(Boolean);
-  if(uids.length){
-    const { data: rosterRows } = await sb.from('event_volunteers').select('event_uid').in('event_uid', uids);
-    (rosterRows||[]).forEach(r=>{ rosterCounts[r.event_uid] = (rosterCounts[r.event_uid]||0)+1; });
+  const eventIds = evs.map(e=>e.id).filter(Boolean);
+  if(eventIds.length){
+    const { data: rosterRows, error: rosterError } = await sb.from('volunteer_event_hours').select('event_id').in('event_id', eventIds);
+    if(rosterError) console.error('Unable to load precinct roster counts:', rosterError);
+    (rosterRows||[]).forEach(r=>{ rosterCounts[r.event_id] = (rosterCounts[r.event_id]||0)+1; });
   }
 
   document.getElementById('activity-card').style.display = 'block';
   document.getElementById('activity-empty').style.display = evs.length ? 'none' : 'block';
   document.getElementById('activity-rows').innerHTML = evs.map(e=>{
-    const href = e.event_uid ? `event-detail.html?event=${encodeURIComponent(e.event_uid)}` : null;
-    const nameCell = href ? `<a href="${href}">${e.event_name||'(untitled event)'}</a>` : (e.event_name||'(untitled event)');
-    return `<tr class="td"><td style="padding:9px 12px">${e.event_date||''}</td><td>${nameCell}</td>
-      <td class="td-muted">${e.event_type||''}</td><td>${rosterCounts[e.event_uid]||0}</td></tr>`;
+    const href = e.id ? `event-detail.html?event=${encodeURIComponent(e.id)}` : null;
+    const eventName = escapeHtml(e.event_name||'(untitled event)');
+    const nameCell = href ? `<a href="${href}">${eventName}</a>` : eventName;
+    return `<tr class="td"><td style="padding:9px 12px">${escapeHtml(e.event_date)}</td><td>${nameCell}</td>
+      <td class="td-muted">${escapeHtml(e.event_type)}</td><td>${rosterCounts[e.id]||0}</td></tr>`;
   }).join('');
 }
 
@@ -132,9 +145,9 @@ function render(){
   rows.sort((a,b)=>{ let av=a[sortState.key], bv=b[sortState.key]; if(av==null) av=sortState.dir===1?Infinity:-Infinity; if(bv==null) bv=sortState.dir===1?Infinity:-Infinity; if(typeof av==='string') return av.localeCompare(bv)*sortState.dir; return (av-bv)*sortState.dir; });
   document.getElementById('count').textContent = rows.length + ' of ' + DATA.length + ' precincts';
   document.getElementById('rows').innerHTML = rows.map(p=>`<tr class="td">
-    <td style="padding:9px 12px">${p.pw}</td><td>${p.ward}</td><td>${p.council}</td><td>${p.planning}</td><td class="td-muted">${p.neighborhood||''}</td>
-    <td>${p.reg}</td><td>${p.vap||'—'}</td><td><span class="chip" style="background:${rateColor(p.rate)}22;color:${rateColor(p.rate)}">${pct(p.rate)}</span></td>
-    <td class="td-muted">${p.polling||''}</td></tr>`).join('');
+    <td style="padding:9px 12px">${escapeHtml(p.pw)}</td><td>${escapeHtml(p.ward)}</td><td>${escapeHtml(p.council)}</td><td>${escapeHtml(p.planning)}</td><td class="td-muted">${escapeHtml(p.neighborhood)}</td>
+    <td>${escapeHtml(p.reg)}</td><td>${escapeHtml(p.vap||'—')}</td><td><span class="chip" style="background:${rateColor(p.rate)}22;color:${rateColor(p.rate)}">${pct(p.rate)}</span></td>
+    <td class="td-muted">${escapeHtml(p.polling)}</td></tr>`).join('');
 }
 ['search','f-ward','f-council','f-planning'].forEach(id=> document.getElementById(id).addEventListener('input', render));
 document.querySelectorAll('th[data-k]').forEach(th=> th.addEventListener('click', ()=>{ const k=th.dataset.k; sortState.dir = sortState.key===k? -sortState.dir:1; sortState.key=k; render(); }));

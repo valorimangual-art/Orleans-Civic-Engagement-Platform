@@ -37,7 +37,7 @@
       <div class="card card-pad" style="border-color:#3f6b48;background:#e3ece3">
         <div style="font:800 16px 'Nunito',sans-serif;color:#3f6b48">Added!</div>
         <p class="td">Opportunity added to the tracker.</p>
-        <p><a href="opportunity-form.html">Add another</a> &middot; <a href="opportunities.html">Back to Opportunities</a></p>
+        <p><a id="detail-link" href="opportunities.html" style="display:none">View opportunity &rarr;</a> <span id="detail-separator" style="display:none">&middot;</span> <a href="opportunity-form.html">Add another</a> &middot; <a href="opportunities.html">Back to Opportunities</a></p>
       </div>
     </div>
   </div>
@@ -52,8 +52,14 @@ document.getElementById('oform').addEventListener('submit', async (e)=>{
     contact: document.getElementById('contact').value, status: document.getElementById('status').value,
     notes: document.getElementById('notes').value
   };
-  const { error } = await sb.from('outreach_opportunities').insert([row]);
-  if(error){ document.getElementById('err').textContent = 'Something went wrong: ' + error.message; return; }
+  const { data, error } = await sb.from('outreach_opportunities').insert([row]).select('id').single();
+  if(error){ console.error('Unable to create opportunity:', error); document.getElementById('err').textContent = 'Unable to add this opportunity.'; return; }
+  if(data && data.id){
+    const detailLink = document.getElementById('detail-link');
+    detailLink.href = 'opportunity-detail.html?o=' + encodeURIComponent(data.id);
+    detailLink.style.display = '';
+    document.getElementById('detail-separator').style.display = '';
+  }
   document.getElementById('form-view').style.display='none';
   document.getElementById('success-view').style.display='block';
 });

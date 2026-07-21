@@ -37,6 +37,7 @@ jobs:
             index.html
             map.html
             opportunities.html
+            opportunity-detail.html
             opportunity-form.html
             partner-detail.html
             partner-form.html

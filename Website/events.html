@@ -34,7 +34,7 @@
     <table class="data-table" style="min-width:900px">
       <thead><tr class="th">
         <th style="padding:10px 12px">Date</th><th>Event</th><th>Location</th><th>Precinct/Ward</th>
-        <th>Type</th><th>Volunteers</th><th>New Reg.</th><th>Already Reg.</th><th>Inactive</th><th>Notes</th>
+        <th>Type</th><th>Volunteers</th><th>New Reg.</th><th>Unsure Status</th><th>Voters Found Inactive</th><th>Notes</th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -42,19 +42,40 @@
 </main>
 </div>
 <script>
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
 async function load(){
-  const { data } = await sb.from('outreach_events').select('*').order('event_date',{ascending:false});
+  const { data, error } = await sb.from('outreach_events')
+    .select('id,event_name,event_date,location,precinct_ward,event_type,volunteers_present,new_registrations,voters_found_inactive,unsure_registration_status,notes')
+    .order('event_date',{ascending:false});
+  if(error){
+    console.error('Unable to load events:', error);
+    document.getElementById('count').textContent = 'Unable to load events.';
+    return;
+  }
   const events = data||[];
   document.getElementById('count').textContent = events.length + ' events logged';
   document.getElementById('rows').innerHTML = events.map(e=>{
-    const href = e.event_uid ? `event-detail.html?event=${encodeURIComponent(e.event_uid)}` : null;
-    const rowAttrs = href ? `style="cursor:pointer" onclick="location.href='${href}'"` : '';
+    const hasId = /^[1-9]\d*$/.test(String(e.id??''));
+    const href = hasId ? `event-detail.html?event=${encodeURIComponent(e.id)}` : null;
+    const rowAttrs = href ? `style="cursor:pointer" data-href="${href}"` : '';
+    const eventName = escapeHtml(e.event_name||'');
+    const nameCell = href ? `<a href="${href}">${eventName}</a>` : eventName;
     return `<tr class="td" ${rowAttrs}>
-    <td style="padding:9px 12px">${e.event_date||''}</td><td>${e.event_name||''}</td><td class="td-muted">${e.location||''}</td>
-    <td class="td-muted">${e.precinct_ward||''}</td><td>${e.event_type||''}</td><td>${e.volunteers_present||''}</td>
-    <td>${e.new_registrations||''}</td><td>${e.found_already_registered||''}</td><td>${e.found_inactive||''}</td>
-    <td class="td-muted">${e.notes||''}</td></tr>`;
+    <td style="padding:9px 12px">${escapeHtml(e.event_date)}</td><td>${nameCell}</td><td class="td-muted">${escapeHtml(e.location)}</td>
+    <td class="td-muted">${escapeHtml(e.precinct_ward)}</td><td>${escapeHtml(e.event_type)}</td><td>${escapeHtml(e.volunteers_present)}</td>
+    <td>${escapeHtml(e.new_registrations)}</td><td>${escapeHtml(e.unsure_registration_status)}</td><td>${escapeHtml(e.voters_found_inactive)}</td>
+    <td class="td-muted">${escapeHtml(e.notes)}</td></tr>`;
   }).join('');
+  document.querySelectorAll('#rows tr[data-href]').forEach(row=>{
+    row.addEventListener('click', event=>{
+      if(event.target.closest('a')) return;
+      location.href = row.dataset.href;
+    });
+  });
 }
 load();
 </script>
