@@ -35,6 +35,7 @@ jobs:
             event-form.html
             events.html
             index.html
+            login.html
             map.html
             opportunities.html
             opportunity-detail.html
@@ -50,6 +51,7 @@ jobs:
             volunteers.html
             voter-contact-form.html
             voter-tracking.html
+            assets/js/auth.js
             style.css
             supabase-config.js
             precinct_boundaries.geojson
@@ -61,17 +63,18 @@ jobs:
               echo "::error file=${source_file}::Required publication file is missing."
               exit 1
             fi
+            mkdir -p "$(dirname "$publish_dir/$file")"
             cp -- "$source_file" "$publish_dir/$file"
           done
 
-          published_count="$(find "$publish_dir" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          published_count="$(find "$publish_dir" -type f | wc -l | tr -d ' ')"
           if [[ "$published_count" -ne "${#required_files[@]}" ]]; then
             echo "::error::Filtered artifact contains an unexpected number of files."
             exit 1
           fi
 
           echo "Filtered publication artifact:"
-          find "$publish_dir" -maxdepth 1 -type f -printf '%f\n' | sort
+          find "$publish_dir" -type f -printf '%P\n' | sort
 
       - name: Check local HTML references
         shell: bash
