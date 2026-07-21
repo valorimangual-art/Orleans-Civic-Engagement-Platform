@@ -1,0 +1,128 @@
+name: Deploy GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build filtered Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          publish_dir="${RUNNER_TEMP}/pages-site"
+          mkdir -p "$publish_dir"
+
+          required_files=(
+            event-detail.html
+            event-form.html
+            events.html
+            index.html
+            map.html
+            opportunities.html
+            opportunity-form.html
+            partner-detail.html
+            partner-form.html
+            partners.html
+            polling-locations.html
+            precincts.html
+            priority-list.html
+            volunteer-detail.html
+            volunteer-form.html
+            volunteers.html
+            voter-contact-form.html
+            voter-tracking.html
+            style.css
+            supabase-config.js
+            precinct_boundaries.geojson
+          )
+
+          for file in "${required_files[@]}"; do
+            source_file="Website/${file}"
+            if [[ ! -f "$source_file" ]]; then
+              echo "::error file=${source_file}::Required publication file is missing."
+              exit 1
+            fi
+            cp -- "$source_file" "$publish_dir/$file"
+          done
+
+          published_count="$(find "$publish_dir" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          if [[ "$published_count" -ne "${#required_files[@]}" ]]; then
+            echo "::error::Filtered artifact contains an unexpected number of files."
+            exit 1
+          fi
+
+          echo "Filtered publication artifact:"
+          find "$publish_dir" -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Check local HTML references
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          publish_dir="${RUNNER_TEMP}/pages-site"
+          while IFS= read -r reference; do
+            case "$reference" in
+              ""|http://*|https://*|mailto:*|tel:*|data:*|\#*)
+                continue
+                ;;
+              *'${'*)
+                # Dynamic targets are covered by the required-file allowlist.
+                continue
+                ;;
+              /*)
+                echo "::error::Root-absolute local reference is not compatible with a GitHub Pages project path: $reference"
+                exit 1
+                ;;
+            esac
+
+            target="${reference%%#*}"
+            target="${target%%\?*}"
+            if [[ -n "$target" && ! -f "$publish_dir/$target" ]]; then
+              echo "::error::Missing local HTML reference target: $reference"
+              exit 1
+            fi
+          done < <(
+            {
+              grep -hEo '(href|src|action)="[^"]+"' "$publish_dir"/*.html \
+                | sed -E 's/^(href|src|action)="//; s/"$//'
+              grep -hEo "fetch\\(['\"][^'\"]+['\"]" "$publish_dir"/*.html \
+                | sed -E "s/^fetch\\(['\"]//; s/['\"]$//" \
+                || true
+            } | sort -u
+          )
+
+          echo "All static local HTML references resolve inside the filtered artifact."
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pages-site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
