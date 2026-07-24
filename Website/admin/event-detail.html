@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Detail — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../supabase-config.js"></script>
+<script src="../assets/js/auth.js"></script>
+</head>
+<body style="visibility:hidden">
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="events.html">&larr; Back to Events</a></nav>
+</header>
+<main class="site">
+  <div id="loading" class="card card-pad"><span class="td-muted">Loading event…</span></div>
+  <div id="state-message" class="card card-pad" style="display:none"></div>
+  <div id="content" style="display:none">
+    <div class="page-title" id="event-title" style="margin-bottom:4px"></div>
+    <div class="td-muted" id="event-sub" style="margin-bottom:18px"></div>
+
+    <div class="stat-grid" id="stat-cards" style="margin-bottom:18px"></div>
+
+    <div class="card card-pad" style="margin-bottom:18px" id="notes-card">
+      <div class="card-title">Notes</div>
+      <div class="td" id="event-notes"></div>
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:18px">
+      <div class="card-title">Volunteer Roster</div>
+      <div id="roster-empty" class="td-muted" style="font-size:13px;display:none">No volunteers logged for this event yet.</div>
+      <div style="overflow-x:auto">
+      <table class="data-table" style="min-width:640px" id="roster-table">
+        <thead><tr class="th"><th style="padding:10px 12px">Name</th><th>Role</th><th>Hours</th><th>Contact</th></tr></thead>
+        <tbody id="roster-rows"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="card-title">Add to Roster</div>
+      <div class="form-wrap" style="max-width:520px">
+        <form id="rform">
+          <div class="field"><label>Volunteer *</label>
+            <select id="volunteer_id" required><option value="">Select a volunteer</option></select>
+          </div>
+          <div class="field"><label>Role</label>
+            <select id="role"><option value="">Select one</option>
+              <option>Canvassing</option><option>Tabling</option><option>Phone Banking</option>
+              <option>Data Entry</option><option>Driving</option><option>Translation</option><option>Event Lead</option>
+            </select>
+          </div>
+          <div class="field"><label>Hours</label><input type="number" step="0.25" id="hours"></div>
+          <button type="submit" class="primary">+ Add to Roster</button>
+          <div id="rerr" style="color:#8f3b39;margin-top:12px;"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const eventParam = params.get('event');
+const eventId = /^[1-9]\d*$/.test(eventParam||'') ? eventParam : null;
+
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
+
+function showState(kind, message){
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'none';
+  const el = document.getElementById('state-message');
+  el.style.display = 'block';
+  el.style.background = kind==='error' ? '#f2e3e2' : '#fff';
+  el.style.borderColor = kind==='error' ? '#e3c9c8' : '#dedad0';
+  el.innerHTML = `<span class="td"${kind==='error'?' style="color:#8f3b39"':''}>${escapeHtml(message)}</span> <a href="events.html">Back to Events</a>`;
+}
+
+async function load(){
+  if(!eventId){ showState('error','Invalid event identifier.'); return; }
+
+  const [evRes, volRes] = await Promise.all([
+    sb.from('outreach_events')
+      .select('id,event_name,event_date,location,precinct_ward,event_type,volunteers_present,new_registrations,notes,created_at,doors_knocked,flyers_distributed,signatures_collected,confirmed,voters_found_inactive,unsure_registration_status')
+      .eq('id', eventId)
+      .maybeSingle(),
+    sb.from('volunteers').select('id,name,phone,email').order('name'),
+  ]);
+  if(evRes.error){ console.error('Unable to load event:', evRes.error); showState('error','Unable to load this event.'); return; }
+  if(volRes.error){ console.error('Unable to load volunteers for roster:', volRes.error); showState('error','Unable to load the event roster form.'); return; }
+  const event = evRes.data;
+  if(!event){ showState('not-found','Event not found.'); return; }
+
+  populateVolunteerSelect(volRes.data||[]);
+
+  document.getElementById('loading').style.display='none';
+  document.getElementById('content').style.display='block';
+  document.getElementById('event-title').textContent = event.event_name || '(untitled event)';
+  document.getElementById('event-sub').textContent = [event.event_date, event.location, event.precinct_ward, event.event_type].filter(Boolean).join(' · ');
+  document.getElementById('event-notes').textContent = event.notes || '—';
+  document.getElementById('notes-card').style.display = event.notes ? 'block' : 'none';
+
+  document.getElementById('stat-cards').innerHTML = [
+    ['New Registrations', event.new_registrations||0],
+    ['Voters Found Inactive', event.voters_found_inactive||0],
+    ['Unsure Registration Status', event.unsure_registration_status||0],
+    ['Doors Knocked', event.doors_knocked||0],
+    ['Flyers Distributed', event.flyers_distributed||0],
+    ['Signatures Collected', event.signatures_collected||0],
+  ].map(([label,val])=>`<div class="card stat-card"><div class="th">${label}</div><div class="stat-value">${escapeHtml(val)}</div></div>`).join('');
+
+  await loadRoster();
+}
+
+async function loadRoster(){
+  const { data, error } = await sb.from('volunteer_event_hours')
+    .select('id,event_id,volunteer_id,hours,role,created_at,volunteers(id,name,phone,email)')
+    .eq('event_id', eventId)
+    .order('created_at');
+  if(error){
+    console.error('Unable to load event roster:', error);
+    document.getElementById('roster-empty').textContent = 'Unable to load the volunteer roster.';
+    document.getElementById('roster-empty').style.display = 'block';
+    document.getElementById('roster-table').style.display = 'none';
+    return;
+  }
+  const rows = data||[];
+  document.getElementById('roster-empty').style.display = rows.length ? 'none' : 'block';
+  document.getElementById('roster-table').style.display = rows.length ? '' : 'none';
+  document.getElementById('roster-rows').innerHTML = rows.map(r=>{
+    const v = r.volunteers || {};
+    const volunteerName = escapeHtml(v.name||'(unknown)');
+    const name = v.id ? `<a href="volunteer-detail.html?v=${encodeURIComponent(v.id)}">${volunteerName}</a>` : volunteerName;
+    return `<tr class="td">
+      <td style="padding:9px 12px">${name}</td><td class="td-muted">${escapeHtml(r.role)}</td>
+      <td>${escapeHtml(r.hours)}</td><td class="td-muted">${escapeHtml([v.phone,v.email].filter(Boolean).join(' / '))}</td></tr>`;
+  }).join('');
+}
+
+function populateVolunteerSelect(vols){
+  const sel = document.getElementById('volunteer_id');
+  vols.filter(v=>v.id).forEach(v=>{
+    const o = document.createElement('option'); o.value = v.id; o.textContent = v.name; sel.appendChild(o);
+  });
+}
+
+async function initializeAdminPage(){
+  const access = await OrleansAuth.requireAdmin({loginUrl:'../login.html'});
+  if(!access.authorized) return;
+
+  document.getElementById('rform').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const row = {
+      event_id: eventId,
+      volunteer_id: document.getElementById('volunteer_id').value,
+      role: document.getElementById('role').value,
+      hours: document.getElementById('hours').value ? parseFloat(document.getElementById('hours').value) : null,
+    };
+    const { error } = await sb.from('volunteer_event_hours').insert([row]);
+    if(error){ console.error('Unable to add roster entry:', error); document.getElementById('rerr').textContent = 'Unable to add this volunteer to the roster.'; return; }
+    document.getElementById('rerr').textContent = '';
+    document.getElementById('rform').reset();
+    await loadRoster();
+  });
+
+  document.body.style.visibility = 'visible';
+  await load();
+}
+void initializeAdminPage();
+</script>
+</body>
+</html>

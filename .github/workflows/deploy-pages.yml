@@ -51,6 +51,15 @@ jobs:
             volunteers.html
             voter-contact-form.html
             voter-tracking.html
+            admin/event-detail.html
+            admin/event-form.html
+            admin/events.html
+            admin/opportunities.html
+            admin/opportunity-detail.html
+            admin/opportunity-form.html
+            admin/volunteer-detail.html
+            admin/volunteer-form.html
+            admin/volunteers.html
             assets/js/auth.js
             style.css
             supabase-config.js
@@ -82,36 +91,43 @@ jobs:
           set -euo pipefail
 
           publish_dir="${RUNNER_TEMP}/pages-site"
-          while IFS= read -r reference; do
-            case "$reference" in
-              ""|http://*|https://*|mailto:*|tel:*|data:*|\#*)
-                continue
-                ;;
-              *'${'*)
-                # Dynamic targets are covered by the required-file allowlist.
-                continue
-                ;;
-              /*)
-                echo "::error::Root-absolute local reference is not compatible with a GitHub Pages project path: $reference"
-                exit 1
-                ;;
-            esac
 
-            target="${reference%%#*}"
-            target="${target%%\?*}"
-            if [[ -n "$target" && ! -f "$publish_dir/$target" ]]; then
-              echo "::error::Missing local HTML reference target: $reference"
-              exit 1
-            fi
-          done < <(
-            {
-              grep -hEo '(href|src|action)="[^"]+"' "$publish_dir"/*.html \
-                | sed -E 's/^(href|src|action)="//; s/"$//'
-              grep -hEo "fetch\\(['\"][^'\"]+['\"]" "$publish_dir"/*.html \
-                | sed -E "s/^fetch\\(['\"]//; s/['\"]$//" \
-                || true
-            } | sort -u
-          )
+          while IFS= read -r -d '' html_file; do
+            html_dir="$(dirname "$html_file")"
+
+            while IFS= read -r reference; do
+              case "$reference" in
+                ""|http://*|https://*|mailto:*|tel:*|data:*|\#*)
+                  continue
+                  ;;
+                *'${'*)
+                  # Dynamic targets are covered by the required-file allowlist.
+                  continue
+                  ;;
+                /*)
+                  echo "::error file=${html_file}::Root-absolute local reference is not compatible with a GitHub Pages project path: $reference"
+                  exit 1
+                  ;;
+              esac
+
+              target="${reference%%#*}"
+              target="${target%%\?*}"
+
+              if [[ -n "$target" && ! -f "${html_dir}/${target}" ]]; then
+                echo "::error file=${html_file}::Missing local HTML reference target: $reference"
+                exit 1
+              fi
+            done < <(
+              {
+                grep -Eo '(href|src|action)="[^"]+"' "$html_file" \
+                  | sed -E 's/^(href|src|action)="//; s/"$//' \
+                  || true
+                grep -Eo "fetch\\(['\"][^'\"]+['\"]" "$html_file" \
+                  | sed -E "s/^fetch\\(['\"]//; s/['\"]$//" \
+                  || true
+              } | sort -u
+            )
+          done < <(find "$publish_dir" -type f -name '*.html' -print0)
 
           echo "All static local HTML references resolve inside the filtered artifact."
 

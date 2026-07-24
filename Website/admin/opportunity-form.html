@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout Opportunity — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../supabase-config.js"></script>
+<script src="../assets/js/auth.js"></script>
+</head>
+<body style="visibility:hidden">
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="opportunities.html">&larr; Back to Opportunities</a></nav>
+</header>
+<main class="site">
+  <div class="page-title">Outreach Opportunity Scout</div>
+  <div class="form-wrap">
+    <div id="form-view">
+      <form id="oform">
+        <div class="field"><label>Event/Opportunity Name *</label><input type="text" id="opportunity_name" required></div>
+        <div class="field"><label>Date or Recurring?</label><input type="text" id="event_date" placeholder="e.g. July 26, or 'every Saturday'"></div>
+        <div class="field"><label>Location</label><input type="text" id="location"></div>
+        <div class="field"><label>Estimated Foot Traffic</label>
+          <select id="foot_traffic"><option value="">Select one</option><option>Low</option><option>Medium</option><option>High</option></select>
+        </div>
+        <div class="field"><label>Contact to Attend</label><input type="text" id="contact"></div>
+        <div class="field"><label>Status</label>
+          <select id="status"><option>Identified</option><option>Contacted</option><option>Confirmed</option><option>Attended</option><option>Passed</option></select>
+        </div>
+        <div class="field"><label>Notes</label><textarea id="notes"></textarea></div>
+        <button type="submit" class="primary">Submit</button>
+        <div id="err" style="color:#8f3b39;margin-top:12px;"></div>
+      </form>
+    </div>
+    <div id="success-view" style="display:none">
+      <div class="card card-pad" style="border-color:#3f6b48;background:#e3ece3">
+        <div style="font:800 16px 'Nunito',sans-serif;color:#3f6b48">Added!</div>
+        <p class="td">Opportunity added to the tracker.</p>
+        <p><a id="detail-link" href="opportunities.html" style="display:none">View opportunity &rarr;</a> <span id="detail-separator" style="display:none">&middot;</span> <a href="opportunity-form.html">Add another</a> &middot; <a href="opportunities.html">Back to Opportunities</a></p>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+async function initializeAdminPage(){
+  const access = await OrleansAuth.requireAdmin({loginUrl:'../login.html'});
+  if(!access.authorized) return;
+  document.body.style.visibility = 'visible';
+  document.getElementById('oform').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const row = {
+    opportunity_name: document.getElementById('opportunity_name').value, event_date: document.getElementById('event_date').value,
+    location: document.getElementById('location').value, foot_traffic: document.getElementById('foot_traffic').value,
+    contact: document.getElementById('contact').value, status: document.getElementById('status').value,
+    notes: document.getElementById('notes').value
+  };
+  const { data, error } = await sb.from('outreach_opportunities').insert([row]).select('id').single();
+  if(error){ console.error('Unable to create opportunity:', error); document.getElementById('err').textContent = 'Unable to add this opportunity.'; return; }
+  if(data && data.id){
+    const detailLink = document.getElementById('detail-link');
+    detailLink.href = 'opportunity-detail.html?o=' + encodeURIComponent(data.id);
+    detailLink.style.display = '';
+    document.getElementById('detail-separator').style.display = '';
+  }
+  document.getElementById('form-view').style.display='none';
+  document.getElementById('success-view').style.display='block';
+  });
+}
+void initializeAdminPage();
+</script>
+</body>
+</html>
