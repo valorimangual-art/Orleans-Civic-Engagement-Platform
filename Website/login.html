@@ -47,6 +47,10 @@
 
         <div id="authenticated-controls" hidden>
           <p id="signed-in-name" style="margin:0 0 14px;font-size:13px"></p>
+          <a id="open-organizer-link" href="admin/volunteers.html"
+            style="display:inline-block;background:#0b1f3a;color:#FFD700;font:800 12.5px 'Nunito',sans-serif;padding:10px 18px;border-radius:5px;margin-right:8px">
+            Open Organizer Area
+          </a>
           <button id="logout-button" class="primary" type="button">Sign Out</button>
         </div>
 
@@ -69,6 +73,7 @@
   const statusMessage = document.getElementById('auth-status');
   const authenticatedControls = document.getElementById('authenticated-controls');
   const signedInName = document.getElementById('signed-in-name');
+  const openOrganizerLink = document.getElementById('open-organizer-link');
   const logoutButton = document.getElementById('logout-button');
   const retryControls = document.getElementById('retry-controls');
   const retryButton = document.getElementById('retry-button');
@@ -102,6 +107,7 @@
     statusMessage.textContent = authState.message;
     form.hidden = authState.status !== 'anonymous';
     authenticatedControls.hidden = !['authorized', 'unauthorized'].includes(authState.status);
+    openOrganizerLink.hidden = authState.status !== 'authorized';
     retryControls.hidden = authState.status !== 'error';
 
     if (authState.status === 'loading') {
@@ -113,8 +119,8 @@
     if (authState.status === 'authorized') {
       const displayName = authState.fullName.trim();
       signedInName.textContent = displayName
-        ? `Signed in as ${displayName}. The organizer area is being prepared.`
-        : 'You are signed in. The organizer area is being prepared.';
+        ? `Signed in as ${displayName}. Organizer access is ready.`
+        : 'You are signed in. Organizer access is ready.';
 
       if (!redirectChecked) {
         redirectChecked = true;

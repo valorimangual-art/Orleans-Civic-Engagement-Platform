@@ -1,84 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Volunteers — Orleans Parish Civic OS</title>
-<link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redirecting to Volunteers</title>
+<script>
+(function () {
+  const target = new URL('admin/volunteers.html', window.location.href);
+  target.search = window.location.search;
+  target.hash = window.location.hash;
+  window.location.replace(target.href);
+})();
+</script>
 </head>
 <body>
-<div style="display:flex;flex-direction:column;min-height:100vh">
-<header class="site">
-  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
-  <nav class="site">
-    <a href="index.html">Overview</a>
-    <a href="map.html">Map</a>
-    <a href="precincts.html">Precincts</a>
-    <a href="priority-list.html">Priority List</a>
-    <a href="volunteers.html" class="active">Volunteers</a>
-    <a href="polling-locations.html">Polling Locations</a>
-    <a href="events.html">Events</a>
-    <a href="partners.html">Partners</a>
-    <a href="opportunities.html">Opportunities</a>
-    <a href="voter-tracking.html">Voter Tracking</a>
-  </nav>
-</header>
-<main class="site">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
-    <div class="page-title" style="margin:0">Volunteers</div>
-    <a href="volunteer-form.html"><button class="primary">+ Sign Up New Volunteer</button></a>
-  </div>
-  <div class="th" id="count" style="margin-bottom:8px"></div>
-  <div class="card" style="overflow-x:auto">
-    <table class="data-table" style="min-width:900px">
-      <thead><tr class="th">
-        <th style="padding:10px 12px">Name</th><th>Phone</th><th>Email</th><th>Home Precinct</th><th>Status</th>
-        <th>Skills</th><th>Transportation</th><th>Availability</th>
-      </tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-  </div>
-</main>
-</div>
+<p>Redirecting to <a id="destination" href="admin/volunteers.html">Volunteers</a>…</p>
 <script>
-const statusColors = {New:'#2560b0', Contacted:'#7d652a', Active:'#3f6b48', Inactive:'#8f3b39'};
-function escapeHtml(value){
-  return String(value ?? '').replace(/[&<>"']/g, ch=>({
-    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-  })[ch]);
-}
-async function load(){
-  const { data, error } = await sb.from('volunteers')
-    .select('id,name,phone,email,home_precinct,status,skills,transportation,availability,created_at')
-    .order('created_at',{ascending:false});
-  if(error){
-    console.error('Unable to load volunteers:', error);
-    document.getElementById('count').textContent = 'Unable to load volunteers.';
-    return;
-  }
-  const vols = data||[];
-  document.getElementById('count').textContent = vols.length + ' volunteers';
-  document.getElementById('rows').innerHTML = vols.map(v=>{
-    const c = statusColors[v.status]||'#666';
-    const hasId = /^[1-9]\d*$/.test(String(v.id??''));
-    const href = hasId ? `volunteer-detail.html?v=${encodeURIComponent(v.id)}` : null;
-    const rowAttrs = href ? `style="cursor:pointer" data-href="${href}"` : '';
-    const name = escapeHtml(v.name||'');
-    const nameCell = href ? `<a href="${href}">${name}</a>` : name;
-    return `<tr class="td" ${rowAttrs}>
-      <td style="padding:9px 12px">${nameCell}</td><td>${escapeHtml(v.phone)}</td><td>${escapeHtml(v.email)}</td><td class="td-muted">${escapeHtml(v.home_precinct)}</td>
-      <td><span class="chip" style="background:${c}22;color:${c}">${escapeHtml(v.status||'New')}</span></td>
-      <td class="td-muted">${escapeHtml(v.skills)}</td><td class="td-muted">${escapeHtml(v.transportation)}</td><td class="td-muted">${escapeHtml(v.availability)}</td></tr>`;
-  }).join('');
-  document.querySelectorAll('#rows tr[data-href]').forEach(row=>{
-    row.addEventListener('click', event=>{
-      if(event.target.closest('a')) return;
-      location.href = row.dataset.href;
-    });
-  });
-}
-load();
+const link = document.getElementById('destination');
+link.search = window.location.search;
+link.hash = window.location.hash;
 </script>
 </body>
 </html>

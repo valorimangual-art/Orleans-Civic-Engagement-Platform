@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Events — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../supabase-config.js"></script>
+<script src="../assets/js/auth.js"></script>
+</head>
+<body style="visibility:hidden">
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="../index.html">Overview</a>
+    <a href="../map.html">Map</a>
+    <a href="../precincts.html">Precincts</a>
+    <a href="../priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="../polling-locations.html">Polling Locations</a>
+    <a href="events.html" class="active">Events</a>
+    <a href="../partners.html">Partners</a>
+    <a href="opportunities.html">Opportunities</a>
+    <a href="../voter-tracking.html">Voter Tracking</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="page-title" style="margin:0">Outreach Events</div>
+    <a href="event-form.html"><button class="primary">+ Log Event</button></a>
+  </div>
+  <div class="th" id="count" style="margin-bottom:8px"></div>
+  <div class="card" style="overflow-x:auto">
+    <table class="data-table" style="min-width:900px">
+      <thead><tr class="th">
+        <th style="padding:10px 12px">Date</th><th>Event</th><th>Location</th><th>Precinct/Ward</th>
+        <th>Type</th><th>Volunteers</th><th>New Reg.</th><th>Unsure Status</th><th>Voters Found Inactive</th><th>Notes</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+</div>
+<script>
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
+async function load(){
+  const { data, error } = await sb.from('outreach_events')
+    .select('id,event_name,event_date,location,precinct_ward,event_type,volunteers_present,new_registrations,voters_found_inactive,unsure_registration_status,notes')
+    .order('event_date',{ascending:false});
+  if(error){
+    console.error('Unable to load events:', error);
+    document.getElementById('count').textContent = 'Unable to load events.';
+    return;
+  }
+  const events = data||[];
+  document.getElementById('count').textContent = events.length + ' events logged';
+  document.getElementById('rows').innerHTML = events.map(e=>{
+    const hasId = /^[1-9]\d*$/.test(String(e.id??''));
+    const href = hasId ? `event-detail.html?event=${encodeURIComponent(e.id)}` : null;
+    const rowAttrs = href ? `style="cursor:pointer" data-href="${href}"` : '';
+    const eventName = escapeHtml(e.event_name||'');
+    const nameCell = href ? `<a href="${href}">${eventName}</a>` : eventName;
+    return `<tr class="td" ${rowAttrs}>
+    <td style="padding:9px 12px">${escapeHtml(e.event_date)}</td><td>${nameCell}</td><td class="td-muted">${escapeHtml(e.location)}</td>
+    <td class="td-muted">${escapeHtml(e.precinct_ward)}</td><td>${escapeHtml(e.event_type)}</td><td>${escapeHtml(e.volunteers_present)}</td>
+    <td>${escapeHtml(e.new_registrations)}</td><td>${escapeHtml(e.unsure_registration_status)}</td><td>${escapeHtml(e.voters_found_inactive)}</td>
+    <td class="td-muted">${escapeHtml(e.notes)}</td></tr>`;
+  }).join('');
+  document.querySelectorAll('#rows tr[data-href]').forEach(row=>{
+    row.addEventListener('click', event=>{
+      if(event.target.closest('a')) return;
+      location.href = row.dataset.href;
+    });
+  });
+}
+async function initializeAdminPage(){
+  const access = await OrleansAuth.requireAdmin({loginUrl:'../login.html'});
+  if(!access.authorized) return;
+  document.body.style.visibility = 'visible';
+  await load();
+}
+void initializeAdminPage();
+</script>
+</body>
+</html>

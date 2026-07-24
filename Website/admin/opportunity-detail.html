@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opportunity Detail — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../supabase-config.js"></script>
+<script src="../assets/js/auth.js"></script>
+</head>
+<body style="visibility:hidden">
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site"><a href="opportunities.html">&larr; Back to Opportunities</a></nav>
+</header>
+<main class="site">
+  <div id="loading" class="card card-pad"><span class="td-muted">Loading opportunity…</span></div>
+  <div id="state-message" class="card card-pad" style="display:none"></div>
+  <div id="content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:4px">
+      <div class="page-title" style="margin:0" id="opportunity-name"></div>
+      <span class="chip" id="opportunity-status"></span>
+    </div>
+    <div class="td-muted" id="opportunity-sub" style="margin-bottom:18px"></div>
+    <div class="card card-pad">
+      <div class="card-title">Opportunity Info</div>
+      <div style="display:flex;flex-direction:column;gap:8px" id="info-rows"></div>
+    </div>
+  </div>
+</main>
+</div>
+<script>
+const statusColors = {Confirmed:'#3f6b48', Attended:'#0b1f3a', Contacted:'#b8963f', Identified:'#666', Passed:'#8f3b39'};
+const params = new URLSearchParams(location.search);
+const opportunityParam = params.get('o');
+const opportunityId = /^[1-9]\d*$/.test(opportunityParam||'') ? opportunityParam : null;
+
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
+
+function showState(kind, message){
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'none';
+  const el = document.getElementById('state-message');
+  el.style.display = 'block';
+  el.style.background = kind==='error' ? '#f2e3e2' : '#fff';
+  el.style.borderColor = kind==='error' ? '#e3c9c8' : '#dedad0';
+  el.innerHTML = `<span class="td"${kind==='error'?' style="color:#8f3b39"':''}>${escapeHtml(message)}</span> <a href="opportunities.html">Back to Opportunities</a>`;
+}
+
+async function load(){
+  if(!opportunityId){ showState('error','Invalid opportunity identifier.'); return; }
+
+  const { data: opportunity, error } = await sb.from('outreach_opportunities')
+    .select('id,opportunity_name,event_date,location,foot_traffic,contact,status,notes,created_at')
+    .eq('id', opportunityId)
+    .maybeSingle();
+  if(error){ console.error('Unable to load opportunity:', error); showState('error','Unable to load this opportunity.'); return; }
+  if(!opportunity){ showState('not-found','Opportunity not found.'); return; }
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+  document.getElementById('opportunity-name').textContent = opportunity.opportunity_name || '(untitled opportunity)';
+  document.getElementById('opportunity-sub').textContent = [opportunity.event_date, opportunity.location].filter(Boolean).join(' · ');
+
+  const status = opportunity.status || 'Identified';
+  const statusEl = document.getElementById('opportunity-status');
+  const color = statusColors[status] || '#666';
+  statusEl.textContent = status;
+  statusEl.style.background = color+'22';
+  statusEl.style.color = color;
+
+  const fields = [
+    ['Date', opportunity.event_date],
+    ['Location', opportunity.location],
+    ['Estimated Foot Traffic', opportunity.foot_traffic],
+    ['Contact', opportunity.contact],
+    ['Notes', opportunity.notes],
+    ['Created', opportunity.created_at],
+  ].filter(([,value])=>value!==null && value!==undefined && String(value).trim()!=='');
+
+  document.getElementById('info-rows').innerHTML = fields.map(([label,value])=>
+    `<div style="display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid #f0ece2;padding-bottom:7px">
+      <span class="th">${label}</span><span class="td" style="text-align:right">${escapeHtml(value)}</span>
+    </div>`
+  ).join('');
+}
+
+async function initializeAdminPage(){
+  const access = await OrleansAuth.requireAdmin({loginUrl:'../login.html'});
+  if(!access.authorized) return;
+  document.body.style.visibility = 'visible';
+  await load();
+}
+void initializeAdminPage();
+</script>
+</body>
+</html>

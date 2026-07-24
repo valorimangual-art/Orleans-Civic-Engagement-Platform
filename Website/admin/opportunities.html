@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opportunities — Orleans Parish Civic OS</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../supabase-config.js"></script>
+<script src="../assets/js/auth.js"></script>
+</head>
+<body style="visibility:hidden">
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<header class="site">
+  <div class="brand">ORLEANS PARISH <span class="accent">CIVIC OS</span></div>
+  <nav class="site">
+    <a href="../index.html">Overview</a>
+    <a href="../map.html">Map</a>
+    <a href="../precincts.html">Precincts</a>
+    <a href="../priority-list.html">Priority List</a>
+    <a href="volunteers.html">Volunteers</a>
+    <a href="../polling-locations.html">Polling Locations</a>
+    <a href="events.html">Events</a>
+    <a href="../partners.html">Partners</a>
+    <a href="opportunities.html" class="active">Opportunities</a>
+    <a href="../voter-tracking.html">Voter Tracking</a>
+  </nav>
+</header>
+<main class="site">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="page-title" style="margin:0">Outreach Opportunities</div>
+    <a href="opportunity-form.html"><button class="primary">+ Scout New Opportunity</button></a>
+  </div>
+  <div class="th" id="count" style="margin-bottom:8px"></div>
+  <div class="card" style="overflow-x:auto">
+    <table class="data-table" style="min-width:800px">
+      <thead><tr class="th">
+        <th style="padding:10px 12px">Opportunity</th><th>Date</th><th>Location</th><th>Foot Traffic</th><th>Contact</th><th>Status</th><th>Notes</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+</div>
+<script>
+const statusColors = {Confirmed:'#3f6b48', Attended:'#0b1f3a', Contacted:'#b8963f', Identified:'#999', Passed:'#8f3b39'};
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
+async function load(){
+  const { data, error } = await sb.from('outreach_opportunities')
+    .select('id,opportunity_name,event_date,location,foot_traffic,contact,status,notes,created_at')
+    .order('created_at',{ascending:false});
+  if(error){
+    console.error('Unable to load opportunities:', error);
+    document.getElementById('count').textContent = 'Unable to load opportunities.';
+    return;
+  }
+  const opps = data||[];
+  document.getElementById('count').textContent = opps.length + ' opportunities tracked';
+  document.getElementById('rows').innerHTML = opps.map(o=>{
+    const c = statusColors[o.status]||'#999';
+    const hasId = /^[1-9]\d*$/.test(String(o.id??''));
+    const href = hasId ? `opportunity-detail.html?o=${encodeURIComponent(o.id)}` : null;
+    const rowAttrs = href ? `style="cursor:pointer" data-href="${href}"` : '';
+    const opportunityName = escapeHtml(o.opportunity_name||'');
+    const nameCell = href ? `<a href="${href}">${opportunityName}</a>` : opportunityName;
+    return `<tr class="td" ${rowAttrs}>
+      <td style="padding:9px 12px">${nameCell}</td><td class="td-muted">${escapeHtml(o.event_date)}</td><td class="td-muted">${escapeHtml(o.location)}</td>
+      <td>${escapeHtml(o.foot_traffic)}</td><td class="td-muted">${escapeHtml(o.contact)}</td>
+      <td><span class="chip" style="background:${c}22;color:${c}">${escapeHtml(o.status)}</span></td><td class="td-muted">${escapeHtml(o.notes)}</td></tr>`;
+  }).join('');
+  document.querySelectorAll('#rows tr[data-href]').forEach(row=>{
+    row.addEventListener('click', event=>{
+      if(event.target.closest('a')) return;
+      location.href = row.dataset.href;
+    });
+  });
+}
+async function initializeAdminPage(){
+  const access = await OrleansAuth.requireAdmin({loginUrl:'../login.html'});
+  if(!access.authorized) return;
+  document.body.style.visibility = 'visible';
+  await load();
+}
+void initializeAdminPage();
+</script>
+</body>
+</html>
